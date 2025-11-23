@@ -273,6 +273,9 @@ Python | C++
 `float` | `double`
 `np.float32` | `float`
 `np.float64` | `double`
+`complex` | `std::complex<double>`
+`np.complex64` | `std::complex<float>`
+`np.complex128` | `std::complex<double>`
 `str` | `std::string`
 `np.ndarray` | `py::array_t`
 `bytes` | `py::bytes`
@@ -328,8 +331,8 @@ Qualifier | C++
 `CRef` | `const T&`
 `RRef` | `T&&`
 `Ptr` | `T*`
-`PtrC` | `T* const`
-`CPtr` | `const T*`
+`PtrC` | `const T*` (pointer-to-const)
+`CPtr` | `T* const` (const pointer)
 `CPtrC` | `const T* const`
 
 (NB pybind11 does not appear to support `std::shared_ptr` or `std::unique_ptr` as function arguments)
@@ -381,7 +384,7 @@ See the examples in [test_callable.py](src/test/test_callable.py) for more detai
 
 The generated module source code is written to `module.cpp` in a specific folder (e.g. `ext/my_module_ext`). Compiler
 commands are redirected to `build.log` in the that folder. NB: build errors refuse to be redirected to a file, and
-`build.log` is not produced when running via pytest, due to they way it captures output streams.
+`build.log` is not produced when running via pytest, due to the way it captures output streams.
 
 Adding `verbose=True` to the `compile(...)` decorator logs the steps taken, with timings, e.g.:
 

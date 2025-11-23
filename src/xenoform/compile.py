@@ -248,9 +248,8 @@ def compile(
         @wraps(func)
         def call_function(*args: P.args, **kwargs: P.kwargs) -> R:
             """Compilation is deferred until here (and cached)"""
-            # error: Argument 1 has incompatible type "*P.args"; expected "Never"  [arg-type]
-            # error: Argument 2 has incompatible type "**P.kwargs"; expected "Never"  [arg-type]
-            return _get_function(module_name, function_spec.qualified_cpp_name())(*args, **kwargs)  # type: ignore[arg-type]
+            cpp_fn = cast(Callable[P, R], _get_function(module_name, function_spec.qualified_cpp_name()))
+            return cpp_fn(*args, **kwargs)
 
         return call_function
 
