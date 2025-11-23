@@ -16,8 +16,8 @@ class CppQualifier(StrEnum):
     CRef = "const {}&"
     RRef = "{}&&"
     Ptr = "{}*"
-    CPtr = "const {}*"
-    PtrC = "{}* const"
+    PtrC = "const {}*"  # pointer-to-const
+    CPtr = "{}* const"  # const pointer
     CPtrC = "const {}* const"
     # NB pybind11 doesnt seem to support shared/unique ptr as a function arg
 
@@ -31,6 +31,9 @@ DEFAULT_TYPE_MAPPING = {
     float: "double",
     np.float32: "float",
     np.float64: "double",
+    complex: "std::complex<double>",
+    np.complex64: "std::complex<float>",
+    np.complex128: "std::complex<double>",
     str: "std::string",
     np.ndarray: "py::array_t",
     bytes: "py::bytes",
@@ -50,6 +53,8 @@ DEFAULT_TYPE_MAPPING = {
 }
 
 header_requirements = {
+    "std::complex<double>": "<pybind11/complex.h>",
+    "std::complex<float>": "<pybind11/complex.h>",
     "std::string": "<string>",
     "std::vector": "<pybind11/stl.h>",
     "std::unordered_set": "<pybind11/stl.h>",
