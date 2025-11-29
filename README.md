@@ -36,6 +36,7 @@ location can be changed).
 "vectorised" operations. You can either implement the function directly, or write a scalar function and make
 use of pybind11's auto-vectorisation feature, if appropriate. (Parallel library support out of the
 box may vary, e.g. on a mac, you may need to manually `brew install libomp` for openmp support)
+- By [default](#free-threaded-interpreter), supports parallel execution when the python interpreter is free-threaded.
 - Supports positional and keyword arguments with defaults, including positional-only and keyword-only markers (`/`,`*`)
 - Supports `*args` and `**kwargs`, mapped  (respectively) to `py::args` and `py::kwargs`. NB type annotations for these
 types are still useful for python type checkers.
@@ -247,15 +248,17 @@ Full code is in [examples/distance_matrix.py](./examples/distance_matrix.py).
 
 ## Configuration
 
+### Location of Extension Modules
+
 By default, compiled modules are placed in an `ext` subdirectory of your project's root. If this location is unsuitable,
-it can be changed by placing `xenoform.toml` in the project root, containing your preferred path:
+it can be overridden using the environment variable `XENOFORM_EXTMODULE_ROOT`. NB avoid using characters in paths
+(e.g. space, hyphen) that would not be valid in a python module name.
 
-```toml
-[extensions]
-module_root_dir = "/tmp/xenoform_ext"
-```
+### Free-threaded Interpreter
 
-NB avoid using characters in paths (e.g. space, hyphen) that would not be valid in a python module name.
+By default, if the interpreter is free-threaded, extension modules will be built without the GIL. This requires the
+extension code to be threadsafe. If this can't be guaranteed, free-threading can be disabled by setting the environment
+variable `XENOFORM_DISABLE_FT`.
 
 ## Type Translations
 

@@ -4,7 +4,8 @@ import numpy.typing as npt
 import pytest
 
 from xenoform import compile
-from xenoform.types import CppQualifier, PyTypeTree, header_requirements, parse_annotation, translate_type
+from xenoform.errors import CppTypeError
+from xenoform.extension_types import CppQualifier, PyTypeTree, header_requirements, parse_annotation, translate_type
 from xenoform.utils import _deduplicate
 
 
@@ -103,6 +104,24 @@ def test_numpy_types() -> None:
     cpptype = translate_type(npt.NDArray[float])
     assert str(cpptype) == "py::array_t<double>"
     assert cpptype.headers(header_requirements) == ["<pybind11/numpy.h>"]
+
+
+def test_user_type() -> None:
+    class X: ...
+
+    with pytest.raises(CppTypeError):
+
+        @compile()
+        def process_x(x: X) -> None:
+            ""
+
+        process_x(X())
+
+    @compile()
+    def process_x_annotated(x: Annotated[X, "py::object"]) -> None:
+        ""
+
+    process_x_annotated(X())
 
 
 def test_parse_annotation() -> None:

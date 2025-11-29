@@ -4,7 +4,7 @@ import re
 from collections.abc import Callable
 from typing import Any, Literal, cast
 
-from xenoform.types import header_requirements, translate_type
+from xenoform.extension_types import header_requirements, translate_type
 
 Platform = Literal["Linux", "Darwin", "Windows"]
 Platforms = list[Platform] | None

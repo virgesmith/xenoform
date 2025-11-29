@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from xenoform import compile
-from xenoform.types import CppQualifier
+from xenoform.extension_types import CppQualifier
 
 
 @compile()

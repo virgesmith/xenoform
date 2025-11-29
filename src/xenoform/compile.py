@@ -12,7 +12,6 @@ from types import ModuleType
 from typing import ParamSpec, TypeVar, cast
 
 import numpy as np
-import toml
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 from setuptools import setup
 
@@ -21,17 +20,7 @@ from xenoform.errors import AnnotationError, CompilationError
 from xenoform.logger import get_logger
 from xenoform.utils import _deduplicate, get_function_scope, translate_function_signature
 
-
-def _get_module_root_dir() -> Path:
-    path = Path("./ext")  # default
-    config_file = Path("xenoform.toml")
-    if config_file.exists():
-        config = toml.load(config_file)
-        path = Path(config["extensions"]["module_root_dir"])
-    return path
-
-
-module_root_dir = _get_module_root_dir()
+module_root_dir = Path(os.getenv("XENOFORM_EXTMODULE_ROOT", "./ext"))
 
 # ensure the module directory is available to Python
 sys.path.append(str(module_root_dir))

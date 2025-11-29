@@ -149,8 +149,8 @@ def parse_annotation(origin: type) -> tuple[type, dict[str, CppQualifier] | dict
     Extract content from Annotation, if present
     """
     t = get_origin(origin)
-    # if t is None and get_args(origin):
-    #     raise CppTypeError("Python types with no default mapping must be annotated with a type override")
+    if t is None and get_args(origin):
+        raise CppTypeError("Python types with no default mapping must be annotated with a type override")
     if t is Annotated:
         base, *extras = get_args(origin)
         assert len(extras) == 1, "one and only one annotation must be specified"

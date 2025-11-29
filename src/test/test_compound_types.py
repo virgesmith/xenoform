@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from xenoform import compile
-from xenoform.types import CppQualifier, translate_type
+from xenoform.extension_types import CppQualifier, translate_type
 
 
 def test_translate_compound_types() -> None:

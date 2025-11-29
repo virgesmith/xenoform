@@ -6,7 +6,7 @@ import pytest
 from xenoform import CompilationError, CppTypeError, Platform, platform_specific
 from xenoform.compile import _check_build_fetch_module_impl, _parse_macros, compile
 from xenoform.cppmodule import FunctionSpec, ModuleSpec, ReturnValuePolicy
-from xenoform.types import CppQualifier
+from xenoform.extension_types import CppQualifier
 from xenoform.utils import translate_function_signature
 
 

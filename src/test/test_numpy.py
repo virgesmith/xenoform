@@ -4,7 +4,7 @@ import numpy as np
 import numpy.typing as npt
 
 from xenoform.compile import compile
-from xenoform.types import CppQualifier
+from xenoform.extension_types import CppQualifier
 
 
 @compile()
