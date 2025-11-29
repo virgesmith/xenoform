@@ -1,6 +1,8 @@
 import inspect
+import os
 import platform
 import re
+import sys
 from collections.abc import Callable
 from typing import Any, Literal, cast
 
@@ -73,7 +75,7 @@ def get_function_scope(func: Callable[..., Any]) -> tuple[str, ...]:
     return tuple(s for s in func.__qualname__.split(".")[:-1] if s != "<locals>")
 
 
-def _deduplicate(params: list[str]) -> list[str]:
+def deduplicate(params: list[str]) -> list[str]:
     """Remove duplicates from a list while preserving order."""
     return list(dict.fromkeys(params))
 
@@ -93,10 +95,17 @@ def group_headers(headers: list[str]) -> list[list[str]]:
     # strip any leading/trailing whitespace
     stripped = [h.strip() for h in headers]
 
-    local_headers = _deduplicate([h for h in stripped if local_pattern.match(h)])
+    local_headers = deduplicate([h for h in stripped if local_pattern.match(h)])
     # if pybind11/pybind11.h comes before pybind11/stl.h it can cause problems so ensure its included last
-    thirdparty_headers = [*_deduplicate([h for h in stripped if thirdparty_pattern.match(h)]), "<pybind11/pybind11.h>"]
-    stdlib_headers = _deduplicate([h for h in stripped if stdlib_pattern.match(h)])
-    other_headers = _deduplicate([h for h in stripped if h not in local_headers + thirdparty_headers + stdlib_headers])
+    thirdparty_headers = [*deduplicate([h for h in stripped if thirdparty_pattern.match(h)]), "<pybind11/pybind11.h>"]
+    stdlib_headers = deduplicate([h for h in stripped if stdlib_pattern.match(h)])
+    other_headers = deduplicate([h for h in stripped if h not in local_headers + thirdparty_headers + stdlib_headers])
 
     return [other_headers, local_headers, thirdparty_headers, stdlib_headers]
+
+
+def build_freethreaded() -> bool:
+    """Return whether interpreter is free-threaded AND free-threading hasn't been manually overridden"""
+    if sys.version_info[1] < 13:
+        return False
+    return not (sys._is_gil_enabled() or "XENOFORM_DISABLE_FT" in os.environ)

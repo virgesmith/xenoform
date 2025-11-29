@@ -1,11 +1,10 @@
-import os
-import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 
 from itrx import Itr
 
 from xenoform import compile
+from xenoform.utils import build_freethreaded
 
 
 @compile(extra_includes=["<thread>", "<chrono>"])
@@ -30,14 +29,14 @@ def test_freethreaded() -> None:
         futures.consume()
     elapsed = time.perf_counter() - start
 
-    if sys._is_gil_enabled() or "XENOFORM_DISABLE_FT" in os.environ:
-        assert elapsed > t * n_threads
-    else:
+    if build_freethreaded():
         # this cant be tested reliably in pytest,
         # assert elapsed < t * n_threads
         print(elapsed, t * n_threads)
+    else:
+        assert elapsed > t * n_threads
 
 
 if __name__ == "__main__":
-    print("FT?", not sys._is_gil_enabled(), "disabled?", "XENOFORM_DISABLE_FT" in os.environ)
+    print("FT?", build_freethreaded())
     test_freethreaded()

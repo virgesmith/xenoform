@@ -6,7 +6,7 @@ import pytest
 from xenoform import compile
 from xenoform.errors import CppTypeError
 from xenoform.extension_types import CppQualifier, PyTypeTree, header_requirements, parse_annotation, translate_type
-from xenoform.utils import _deduplicate
+from xenoform.utils import deduplicate
 
 
 def test_basic_types() -> None:
@@ -93,7 +93,7 @@ def test_specialised_types() -> None:
     cpptype = translate_type(dict[str, list[bool]])
     assert str(cpptype) == "std::unordered_map<std::string, std::vector<bool>>"
     # pybind11/stl.h gets pulled in twice
-    assert _deduplicate(cpptype.headers(header_requirements)) == ["<pybind11/stl.h>", "<string>"]
+    assert deduplicate(cpptype.headers(header_requirements)) == ["<pybind11/stl.h>", "<string>"]
 
 
 def test_numpy_types() -> None:

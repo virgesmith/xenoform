@@ -257,8 +257,8 @@ it can be overridden using the environment variable `XENOFORM_EXTMODULE_ROOT`. N
 ### Free-threaded Interpreter
 
 By default, if the interpreter is free-threaded, extension modules will be built without the GIL. This requires the
-extension code to be threadsafe. If this can't be guaranteed, free-threading can be disabled by setting the environment
-variable `XENOFORM_DISABLE_FT`.
+extension code to be threadsafe. If xenoform detects an environment variable `XENOFORM_DISABLE_FT`, free-threading is
+disabled.
 
 ## Type Translations
 
