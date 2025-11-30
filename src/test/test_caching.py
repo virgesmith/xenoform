@@ -7,14 +7,14 @@ from xenoform.logger import Logger
 compile_module = importlib.import_module("xenoform.compile")
 
 
-@compile_module.compile(verbose=True)  # type: ignore[misc]
+@compile_module.compile(verbose=True)  # type: ignore[untyped-decorator]
 def f() -> int:  # type: ignore[empty-body]
     """
     return 42;
     """
 
 
-@compile_module.compile(verbose=True)  # type: ignore[misc]
+@compile_module.compile(verbose=True)  # type: ignore[untyped-decorator]
 def g() -> str:  # type: ignore[empty-body]
     """
     return "hello";

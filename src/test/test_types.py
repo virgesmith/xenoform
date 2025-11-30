@@ -4,8 +4,9 @@ import numpy.typing as npt
 import pytest
 
 from xenoform import compile
-from xenoform.types import CppQualifier, PyTypeTree, header_requirements, parse_annotation, translate_type
-from xenoform.utils import _deduplicate
+from xenoform.errors import CppTypeError
+from xenoform.extension_types import CppQualifier, PyTypeTree, header_requirements, parse_annotation, translate_type
+from xenoform.utils import deduplicate
 
 
 def test_basic_types() -> None:
@@ -92,7 +93,7 @@ def test_specialised_types() -> None:
     cpptype = translate_type(dict[str, list[bool]])
     assert str(cpptype) == "std::unordered_map<std::string, std::vector<bool>>"
     # pybind11/stl.h gets pulled in twice
-    assert _deduplicate(cpptype.headers(header_requirements)) == ["<pybind11/stl.h>", "<string>"]
+    assert deduplicate(cpptype.headers(header_requirements)) == ["<pybind11/stl.h>", "<string>"]
 
 
 def test_numpy_types() -> None:
@@ -103,6 +104,24 @@ def test_numpy_types() -> None:
     cpptype = translate_type(npt.NDArray[float])
     assert str(cpptype) == "py::array_t<double>"
     assert cpptype.headers(header_requirements) == ["<pybind11/numpy.h>"]
+
+
+def test_user_type() -> None:
+    class X: ...
+
+    with pytest.raises(CppTypeError):
+
+        @compile()
+        def process_x(x: X) -> None:
+            ""
+
+        process_x(X())
+
+    @compile()
+    def process_x_annotated(x: Annotated[X, "py::object"]) -> None:
+        ""
+
+    process_x_annotated(X())
 
 
 def test_parse_annotation() -> None:

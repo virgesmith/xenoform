@@ -12,26 +12,15 @@ from types import ModuleType
 from typing import ParamSpec, TypeVar, cast
 
 import numpy as np
-import toml
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 from setuptools import setup
 
 from xenoform.cppmodule import FunctionSpec, ModuleSpec, ReturnValuePolicy
 from xenoform.errors import AnnotationError, CompilationError
 from xenoform.logger import get_logger
-from xenoform.utils import _deduplicate, get_function_scope, translate_function_signature
+from xenoform.utils import deduplicate, get_function_scope, translate_function_signature
 
-
-def _get_module_root_dir() -> Path:
-    path = Path("./ext")  # default
-    config_file = Path("xenoform.toml")
-    if config_file.exists():
-        config = toml.load(config_file)
-        path = Path(config["extensions"]["module_root_dir"])
-    return path
-
-
-module_root_dir = _get_module_root_dir()
+module_root_dir = Path(os.getenv("XENOFORM_EXTMODULE_ROOT", "./ext"))
 
 # ensure the module directory is available to Python
 sys.path.append(str(module_root_dir))
@@ -99,10 +88,10 @@ def _check_build_fetch_module_impl(
             Pybind11Extension(
                 module_name,
                 ["module.cpp"],
-                define_macros=list(_parse_macros(_deduplicate(module_spec.define_macros)).items()),
-                extra_compile_args=_deduplicate(module_spec.extra_compile_args),
-                extra_link_args=_deduplicate(module_spec.extra_link_args),
-                include_dirs=[np.get_include(), *_deduplicate(module_spec.include_paths)],
+                define_macros=list(_parse_macros(deduplicate(module_spec.define_macros)).items()),
+                extra_compile_args=deduplicate(module_spec.extra_compile_args),
+                extra_link_args=deduplicate(module_spec.extra_link_args),
+                include_dirs=[np.get_include(), *deduplicate(module_spec.include_paths)],
                 cxx_std=module_spec.cxx_std,
             )
         ]
