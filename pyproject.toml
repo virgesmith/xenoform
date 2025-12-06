@@ -1,6 +1,6 @@
 [project]
 name = "xenoform"
-version = "0.1.5"
+version = "0.1.6"
 description = "Inlined C++ functions"
 readme = "README.md"
 authors = [
@@ -16,7 +16,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "itrx>=0.1.1",
+    "itrx>=0.2.0",
     "numpy>=2.3.2",
     "pybind11>=3.0.0",
     "setuptools>=80.9.0",
