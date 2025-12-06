@@ -26,13 +26,13 @@ def _translate_value(value: Any) -> str:
     return translations.get(str(value), str(value))
 
 
-def _splitargs(s: str):
+def _splitargs(signature: str) -> list[str]:
     """
     Need to deal with commas in types, e.g. dict[str, int]. Replace the non-nested commas ONLY with $ then split
     """
     level = 0
 
-    def mark(c: str):
+    def mark(c: str) -> str:
         nonlocal level
         if c == "[":
             level += 1
@@ -46,7 +46,7 @@ def _splitargs(s: str):
         map(
             str.strip,
             "".join(
-                Itr(s).skip_while(lambda c: c != "(").skip(1).take_while(lambda c: c != ")").map(mark).collect()
+                Itr(signature).skip_while(lambda c: c != "(").skip(1).take_while(lambda c: c != ")").map(mark).collect()
             ).split("$"),
         )
     )

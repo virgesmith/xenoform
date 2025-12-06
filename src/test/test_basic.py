@@ -55,7 +55,7 @@ def test_signature_translation1() -> None:
 
 
 def test_signature_translation2() -> None:
-    def f6(a: float, /, b: bool, *, c: int) -> None:  # type: ignore[empty-body]
+    def f6(a: float, /, b: bool, *, c: int) -> None:
         ""
 
     assert translate_function_signature(f6) == (
@@ -64,7 +64,7 @@ def test_signature_translation2() -> None:
         [],
     )
 
-    def f7(*, c: int) -> None:  # type: ignore[empty-body]
+    def f7(*, c: int) -> None:
         ""
 
     assert translate_function_signature(f7) == (
@@ -73,7 +73,7 @@ def test_signature_translation2() -> None:
         [],
     )
 
-    def f8(a: float, c: int, /) -> None:  # type: ignore[empty-body]
+    def f8(a: float, c: int, /) -> None:
         ""
 
     assert translate_function_signature(f8) == (
@@ -82,7 +82,7 @@ def test_signature_translation2() -> None:
         [],
     )
 
-    def f9(a: float, *, c: bool = True) -> None:  # type: ignore[empty-body]
+    def f9(a: float, *, c: bool = True) -> None:
         ""
 
     assert translate_function_signature(f9) == (
