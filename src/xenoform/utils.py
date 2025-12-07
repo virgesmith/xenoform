@@ -3,8 +3,12 @@ import os
 import platform
 import re
 import sys
+from collections import defaultdict
 from collections.abc import Callable
+from operator import add
 from typing import Any, Literal, cast
+
+from itrx import Itr
 
 from xenoform.extension_types import header_requirements, translate_type
 
@@ -24,6 +28,22 @@ def _translate_value(value: Any) -> str:
     return translations.get(str(value), str(value))
 
 
+def _splitargs(signature: str) -> tuple[str, ...]:
+    """
+    Need to deal with commas in types, e.g. dict[str, int]. Replace the non-nested commas ONLY with $ then split
+    """
+    # extract the part in between ()
+    base = Itr(signature).skip_while(lambda c: c != "(").skip(1).take_while(lambda c: c != ")")
+    # mark the level of [] nesting
+    mark = base.copy().map_dict(defaultdict(int, {"[": 1, "]": -1})).accumulate(add)
+    # combine, replace level-0 commas with $, split and strip
+    return (
+        Itr(base.zip(mark).map(lambda cn: "$" if cn == (",", 0) else cn[0]).fold("", add).split("$"))
+        .map(str.strip)
+        .collect()
+    )
+
+
 def translate_function_signature(func: Callable[..., Any]) -> tuple[str, list[str], list[str]]:
     "map python signature to C++ equivalent"
     arg_spec = inspect.getfullargspec(func)
@@ -34,7 +54,7 @@ def translate_function_signature(func: Callable[..., Any]) -> tuple[str, list[st
 
     # parse signature - get defaults and positions of pos-only and kw-only
     sig = inspect.signature(func)
-    raw_sig = str(sig).replace(" ", "").split(",")
+    raw_sig = _splitargs(str(sig))
     pos_only = raw_sig.index("/") if "/" in raw_sig else None
     kw_only = raw_sig.index("*") if "*" in raw_sig else None
     defaults = {k: v.default for k, v in sig.parameters.items() if v.default is not inspect.Parameter.empty}
@@ -60,10 +80,11 @@ def translate_function_signature(func: Callable[..., Any]) -> tuple[str, list[st
             # dont create an annotation for var(kw)args
             if arg_spec.varargs != var_name and arg_spec.varkw != var_name:
                 arg_annotations.append(arg_annotation)
-    if pos_only:
+    if pos_only is not None:
         arg_annotations.insert(pos_only, "py::pos_only()")
-    if kw_only:
+    if kw_only is not None:
         arg_annotations.insert(kw_only, "py::kw_only()")
+
     return f"[]({', '.join(arg_defs)})" + (f" -> {ret}" if ret else ""), arg_annotations, headers
 
 
