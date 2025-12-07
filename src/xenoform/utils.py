@@ -1,11 +1,10 @@
-from collections import defaultdict
 import inspect
-from operator import add
 import os
 import platform
 import re
 import sys
 from collections.abc import Callable
+from operator import add
 from typing import Any, Literal, cast
 
 from itrx import Itr
