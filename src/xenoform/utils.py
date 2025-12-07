@@ -1,9 +1,9 @@
-from collections import defaultdict
 import inspect
 import os
 import platform
 import re
 import sys
+from collections import defaultdict
 from collections.abc import Callable
 from operator import add
 from typing import Any, Literal, cast
