@@ -96,10 +96,10 @@ wheels = [
 
 [[package]]
 name = "itrx"
-version = "0.2.0"
+version = "0.2.1"
 source = { registry = "https://pypi.org/simple" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/90/00/0d2eaff12515d123bca17f12b71eef96cc4e5171a4dbb503b672327407b2/itrx-0.2.0-py3-none-any.whl", hash = "sha256:1a7edbdea3f1ef5ace163b6f1628bd832448b47d5c49666dbb1fd1a188a690c4", size = 10265, upload-time = "2025-11-22T12:48:05.768Z" },
+    { url = "https://files.pythonhosted.org/packages/5b/b1/b8602c2100fed21422afbebf8a344d134ec07fe933cbda6837d7a7f8870b/itrx-0.2.1-py3-none-any.whl", hash = "sha256:4ca02a431faad59c89fc6069544155648f089d4d8687f32d6798346d1e59d0d4", size = 10881, upload-time = "2025-12-07T17:51:22.583Z" },
 ]
 
 [[package]]
@@ -533,7 +533,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "itrx", specifier = ">=0.2.0" },
+    { name = "itrx", specifier = ">=0.2.1" },
     { name = "numpy", specifier = ">=2.3.2" },
     { name = "pandas", marker = "extra == 'examples'", specifier = ">=2.3.1" },
     { name = "pandas-stubs", marker = "extra == 'examples'", specifier = ">=2.3.0.250703" },
