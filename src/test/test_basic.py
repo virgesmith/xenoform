@@ -55,6 +55,15 @@ def test_signature_translation1() -> None:
 
 
 def test_signature_translation2() -> None:
+    def f0() -> None:
+        ""
+
+    assert translate_function_signature(f0) == (
+        "[]() -> void",
+        [],
+        [],
+    )
+
     def f6(a: float, /, b: bool, *, c: int) -> None:
         ""
 

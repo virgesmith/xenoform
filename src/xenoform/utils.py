@@ -1,4 +1,6 @@
+from collections import defaultdict
 import inspect
+from operator import add
 import os
 import platform
 import re
@@ -26,29 +28,45 @@ def _translate_value(value: Any) -> str:
     return translations.get(str(value), str(value))
 
 
-def _splitargs(signature: str) -> list[str]:
+# def _splitargs(signature: str) -> list[str]:
+#     """
+#     Need to deal with commas in types, e.g. dict[str, int]. Replace the non-nested commas ONLY with $ then split
+#     """
+#     level = 0
+
+#     def mark(c: str) -> str:
+#         nonlocal level
+#         if c == "[":
+#             level += 1
+#         elif c == "]":
+#             level -= 1
+#         elif c == "," and level == 0:
+#             return "$"
+#         return c
+
+#     return list(
+#         map(
+#             str.strip,
+#             "".join(
+#                 Itr(signature).skip_while(lambda c: c != "(").skip(1).take_while(lambda c: c != ")").map(mark).collect()
+#             ).split("$"),
+#         )
+#     )
+
+
+def _splitargs(signature: str) -> tuple[str, ...]:
     """
     Need to deal with commas in types, e.g. dict[str, int]. Replace the non-nested commas ONLY with $ then split
     """
-    level = 0
-
-    def mark(c: str) -> str:
-        nonlocal level
-        if c == "[":
-            level += 1
-        elif c == "]":
-            level -= 1
-        elif c == "," and level == 0:
-            return "$"
-        return c
-
-    return list(
-        map(
-            str.strip,
-            "".join(
-                Itr(signature).skip_while(lambda c: c != "(").skip(1).take_while(lambda c: c != ")").map(mark).collect()
-            ).split("$"),
-        )
+    # extract the part in between ()
+    base = Itr(signature).skip_while(lambda c: c != "(").skip(1).take_while(lambda c: c != ")")
+    # mark the level of [] nesting
+    mark = base.copy().map(lambda c: 1 if c == "[" else -1 if c == "]" else 0).accumulate(add)
+    # combine, replace level-0 commas with $, split and strip
+    return (
+        Itr(base.zip(mark).map(lambda cn: "$" if cn == (",", 0) else cn[0]).fold("", add).split("$"))
+        .map(str.strip)
+        .collect()
     )
 
 
@@ -66,8 +84,6 @@ def translate_function_signature(func: Callable[..., Any]) -> tuple[str, list[st
     pos_only = raw_sig.index("/") if "/" in raw_sig else None
     kw_only = raw_sig.index("*") if "*" in raw_sig else None
     defaults = {k: v.default for k, v in sig.parameters.items() if v.default is not inspect.Parameter.empty}
-
-    print(pos_only, kw_only)
 
     ret: str | None = None
     for var_name, type_ in arg_spec.annotations.items():
@@ -95,7 +111,6 @@ def translate_function_signature(func: Callable[..., Any]) -> tuple[str, list[st
     if kw_only is not None:
         arg_annotations.insert(kw_only, "py::kw_only()")
 
-    print(arg_annotations)
     return f"[]({', '.join(arg_defs)})" + (f" -> {ret}" if ret else ""), arg_annotations, headers
 
 
