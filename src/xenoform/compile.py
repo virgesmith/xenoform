@@ -11,6 +11,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import ParamSpec, TypeVar, cast
 
+from itrx import Itr
 import numpy as np
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 from setuptools import setup
@@ -47,7 +48,12 @@ def _get_module_checksum(module_name: str) -> str | None:
 
 def _parse_macros(macro_list: list[str]) -> dict[str, str | None]:
     """Map ["DEF1", "DEF2=3"] to {"DEF1": None, "DEF2": "3"}"""
-    return {kv[0]: kv[1] if len(kv) == 2 else None for d in macro_list for kv in [d.split("=", 1)]}
+    return (
+        Itr(macro_list)
+        .map(lambda d: d.split("="))
+        .map(lambda kv: (kv[0], kv[1] if len(kv) == 2 else None))
+        .collect(dict)
+    )
 
 
 def _check_build_fetch_module_impl(

@@ -4,7 +4,7 @@ import platform
 import re
 import sys
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from operator import add
 from typing import Any, Literal, cast
 
@@ -96,8 +96,8 @@ def get_function_scope(func: Callable[..., Any]) -> tuple[str, ...]:
     return tuple(s for s in func.__qualname__.split(".")[:-1] if s != "<locals>")
 
 
-def deduplicate(params: list[str]) -> list[str]:
-    """Remove duplicates from a list while preserving order."""
+def deduplicate(params: Iterable[str]) -> list[str]:
+    """Remove duplicates from an iterator while preserving order."""
     return list(dict.fromkeys(params))
 
 
@@ -113,16 +113,22 @@ def group_headers(headers: list[str]) -> list[list[str]]:
     thirdparty_pattern = re.compile(r"^<.*\.h|hpp>$")
     stdlib_pattern = re.compile(r"^<[^.]+>$")
 
-    # strip any leading/trailing whitespace
-    stripped = [h.strip() for h in headers]
-
-    local_headers = deduplicate([h for h in stripped if local_pattern.match(h)])
+    stripped = Itr(headers).map(str.strip)
+    local_headers, other_headers = stripped.partition(local_pattern.match)
+    thirdparty_headers, other_headers = other_headers.partition(thirdparty_pattern.match)
     # if pybind11/pybind11.h comes before pybind11/stl.h it can cause problems so ensure its included last
-    thirdparty_headers = [*deduplicate([h for h in stripped if thirdparty_pattern.match(h)]), "<pybind11/pybind11.h>"]
-    stdlib_headers = deduplicate([h for h in stripped if stdlib_pattern.match(h)])
-    other_headers = deduplicate([h for h in stripped if h not in local_headers + thirdparty_headers + stdlib_headers])
+    thirdparty_headers = thirdparty_headers.filter(lambda h: h != "<pybind11/pybind11.h>").chain(
+        ["<pybind11/pybind11.h>"]
+    )
 
-    return [other_headers, local_headers, thirdparty_headers, stdlib_headers]
+    stdlib_headers, other_headers = other_headers.partition(stdlib_pattern.match)
+
+    return [
+        deduplicate(other_headers),
+        deduplicate(local_headers),
+        deduplicate(thirdparty_headers),
+        deduplicate(stdlib_headers),
+    ]
 
 
 def build_freethreaded() -> bool:
