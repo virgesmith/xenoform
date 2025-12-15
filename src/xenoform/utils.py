@@ -114,14 +114,14 @@ def group_headers(headers: list[str]) -> list[list[str]]:
     stdlib_pattern = re.compile(r"^<[^.]+>$")
 
     stripped = Itr(headers).map(str.strip)
-    local_headers, other_headers = stripped.partition(local_pattern.match)
-    thirdparty_headers, other_headers = other_headers.partition(thirdparty_pattern.match)
+    local_headers, other_headers = stripped.partition(local_pattern.match)  # type: ignore[arg-type]
+    thirdparty_headers, other_headers = other_headers.partition(thirdparty_pattern.match)  # type: ignore[arg-type]
     # if pybind11/pybind11.h comes before pybind11/stl.h it can cause problems so ensure its included last
     thirdparty_headers = thirdparty_headers.filter(lambda h: h != "<pybind11/pybind11.h>").chain(
         ["<pybind11/pybind11.h>"]
     )
 
-    stdlib_headers, other_headers = other_headers.partition(stdlib_pattern.match)
+    stdlib_headers, other_headers = other_headers.partition(stdlib_pattern.match)  # type: ignore[arg-type]
 
     return [
         deduplicate(other_headers),

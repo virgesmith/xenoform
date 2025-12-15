@@ -11,8 +11,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import ParamSpec, TypeVar, cast
 
-from itrx import Itr
 import numpy as np
+from itrx import Itr
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 from setuptools import setup
 
