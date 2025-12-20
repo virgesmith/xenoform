@@ -1,15 +1,17 @@
 import inspect
-import os
 import platform
 import re
+import subprocess
 import sys
 from collections import defaultdict
 from collections.abc import Callable, Iterable
 from operator import add
 from typing import Any, Literal, cast
 
+import clang_format  # type: ignore[import-untyped]
 from itrx import Itr
 
+from xenoform.config import get_config
 from xenoform.extension_types import header_requirements, translate_type
 
 Platform = Literal["Linux", "Darwin", "Windows"]
@@ -135,4 +137,16 @@ def build_freethreaded() -> bool:
     """Return whether interpreter is free-threaded AND free-threading hasn't been manually overridden"""
     if sys.version_info[1] < 13:
         return False
-    return not (sys._is_gil_enabled() or "XENOFORM_DISABLE_FT" in os.environ)
+    return not (sys._is_gil_enabled() or get_config().disable_ft is not None)
+
+
+def format_cpp(code: str) -> str:
+    """Use clang-format to prettify code"""
+    cmd = [clang_format.get_executable("clang-format"), f"--style={get_config().cpp_format}"]
+    try:
+        result = subprocess.run(cmd, input=code, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"clang-format failed: {e}. module.cpp will be unformatted")
+    else:
+        code = result.stdout
+    return code

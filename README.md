@@ -383,6 +383,16 @@ necessary, although code may also need to be modified to deal with `py::object` 
 
 See the examples in [test_callable.py](src/test/test_callable.py) for more detail.
 
+## C++ Code Style
+
+By default, generated C++ code is formatted using `clang-format` (if available) using it's default style (LLVM). This
+can be changed by either:
+
+- setting the environment variable `XENOFORM_CPP_FORMAT` to an alternative style, e.g. "GNU"
+- defining a custom style in `.clang-format` in the project root directory
+
+See `clang-format` documentation for more info.
+
 ## Troubleshooting
 
 The generated module source code is written to `module.cpp` in a specific folder (e.g. `ext/my_module_ext`). Compiler

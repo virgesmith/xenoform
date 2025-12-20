@@ -18,3 +18,5 @@ ext/
 *.o
 *.a
 *.so
+
+.clang-format

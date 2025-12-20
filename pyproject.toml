@@ -16,9 +16,11 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
+    "clang-format>=21.1.8",
     "itrx>=0.2.1",
     "numpy>=2.3.2",
     "pybind11>=3.0.0",
+    "pydantic-settings>=2.12.0",
     "setuptools>=80.9.0",
     "types-setuptools>=80.9.0.20250529",
 ]
@@ -39,7 +41,6 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "clang-format>=21.1.8",
     "mypy>=1.17.0",
     "pytest>=8.4.1",
     "pytest-cov>=6.2.1",

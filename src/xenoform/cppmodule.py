@@ -1,15 +1,13 @@
-import subprocess
 from dataclasses import dataclass, field
 from enum import StrEnum
 from hashlib import sha256
 from typing import Self
 
-import clang_format  # type: ignore[import-untyped]
 from itrx import Itr
 
 from xenoform import __version__ as version
 from xenoform.logger import get_logger
-from xenoform.utils import build_freethreaded, deduplicate, group_headers
+from xenoform.utils import build_freethreaded, deduplicate, format_cpp, group_headers
 
 logger = get_logger()
 
@@ -143,14 +141,7 @@ class ModuleSpec:
             function_definitions=function_defs,
         )
 
-        try:
-            result = subprocess.run(
-                [clang_format.get_executable("clang-format")], input=code, capture_output=True, text=True, check=True
-            )
-        except subprocess.CalledProcessError as e:
-            logger(f"clang-format failed: {e}. module.cpp will be unformatted")
-        else:
-            code = result.stdout
+        code = format_cpp(code)
 
         # return code and hash
         return code, sha256(code.encode()).hexdigest()
