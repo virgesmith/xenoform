@@ -39,6 +39,7 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "clang-format>=21.1.8",
     "mypy>=1.17.0",
     "pytest>=8.4.1",
     "pytest-cov>=6.2.1",

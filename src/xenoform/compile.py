@@ -86,6 +86,7 @@ def _check_build_fetch_module_impl(
 
         # save the code with the hash embedded
         with (module_dir / "module.cpp").open("w") as fd:
+            # can't use format as its full of { }
             fd.write(code.replace("__HASH__", str(hashval)))
 
         logger(f"wrote {module_dir}/module.cpp")
