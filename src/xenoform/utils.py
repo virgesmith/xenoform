@@ -1,11 +1,17 @@
 import inspect
-import os
 import platform
 import re
+import subprocess
 import sys
-from collections.abc import Callable
+from collections import defaultdict
+from collections.abc import Callable, Iterable
+from operator import add
 from typing import Any, Literal, cast
 
+import clang_format  # type: ignore[import-untyped]
+from itrx import Itr
+
+from xenoform.config import get_config
 from xenoform.extension_types import header_requirements, translate_type
 
 Platform = Literal["Linux", "Darwin", "Windows"]
@@ -24,6 +30,22 @@ def _translate_value(value: Any) -> str:
     return translations.get(str(value), str(value))
 
 
+def _splitargs(signature: str) -> tuple[str, ...]:
+    """
+    Need to deal with commas in types, e.g. dict[str, int]. Replace the non-nested commas ONLY with $ then split
+    """
+    # extract the part in between ()
+    base = Itr(signature).skip_while(lambda c: c != "(").skip(1).take_while(lambda c: c != ")")
+    # mark the level of [] nesting
+    mark = base.copy().map_dict(defaultdict(int, {"[": 1, "]": -1})).accumulate(add)
+    # combine, replace level-0 commas with $, split and strip
+    return (
+        Itr(base.zip(mark).map(lambda cn: "$" if cn == (",", 0) else cn[0]).fold("", add).split("$"))
+        .map(str.strip)
+        .collect()
+    )
+
+
 def translate_function_signature(func: Callable[..., Any]) -> tuple[str, list[str], list[str]]:
     "map python signature to C++ equivalent"
     arg_spec = inspect.getfullargspec(func)
@@ -34,7 +56,7 @@ def translate_function_signature(func: Callable[..., Any]) -> tuple[str, list[st
 
     # parse signature - get defaults and positions of pos-only and kw-only
     sig = inspect.signature(func)
-    raw_sig = str(sig).replace(" ", "").split(",")
+    raw_sig = _splitargs(str(sig))
     pos_only = raw_sig.index("/") if "/" in raw_sig else None
     kw_only = raw_sig.index("*") if "*" in raw_sig else None
     defaults = {k: v.default for k, v in sig.parameters.items() if v.default is not inspect.Parameter.empty}
@@ -60,10 +82,11 @@ def translate_function_signature(func: Callable[..., Any]) -> tuple[str, list[st
             # dont create an annotation for var(kw)args
             if arg_spec.varargs != var_name and arg_spec.varkw != var_name:
                 arg_annotations.append(arg_annotation)
-    if pos_only:
+    if pos_only is not None:
         arg_annotations.insert(pos_only, "py::pos_only()")
-    if kw_only:
+    if kw_only is not None:
         arg_annotations.insert(kw_only, "py::kw_only()")
+
     return f"[]({', '.join(arg_defs)})" + (f" -> {ret}" if ret else ""), arg_annotations, headers
 
 
@@ -75,8 +98,8 @@ def get_function_scope(func: Callable[..., Any]) -> tuple[str, ...]:
     return tuple(s for s in func.__qualname__.split(".")[:-1] if s != "<locals>")
 
 
-def deduplicate(params: list[str]) -> list[str]:
-    """Remove duplicates from a list while preserving order."""
+def deduplicate(params: Iterable[str]) -> list[str]:
+    """Remove duplicates from an iterator while preserving order."""
     return list(dict.fromkeys(params))
 
 
@@ -92,20 +115,38 @@ def group_headers(headers: list[str]) -> list[list[str]]:
     thirdparty_pattern = re.compile(r"^<.*\.h|hpp>$")
     stdlib_pattern = re.compile(r"^<[^.]+>$")
 
-    # strip any leading/trailing whitespace
-    stripped = [h.strip() for h in headers]
-
-    local_headers = deduplicate([h for h in stripped if local_pattern.match(h)])
+    stripped = Itr(headers).map(str.strip)
+    local_headers, other_headers = stripped.partition(local_pattern.match)  # type: ignore[arg-type]
+    thirdparty_headers, other_headers = other_headers.partition(thirdparty_pattern.match)  # type: ignore[arg-type]
     # if pybind11/pybind11.h comes before pybind11/stl.h it can cause problems so ensure its included last
-    thirdparty_headers = [*deduplicate([h for h in stripped if thirdparty_pattern.match(h)]), "<pybind11/pybind11.h>"]
-    stdlib_headers = deduplicate([h for h in stripped if stdlib_pattern.match(h)])
-    other_headers = deduplicate([h for h in stripped if h not in local_headers + thirdparty_headers + stdlib_headers])
+    thirdparty_headers = thirdparty_headers.filter(lambda h: h != "<pybind11/pybind11.h>").chain(
+        ["<pybind11/pybind11.h>"]
+    )
 
-    return [other_headers, local_headers, thirdparty_headers, stdlib_headers]
+    stdlib_headers, other_headers = other_headers.partition(stdlib_pattern.match)  # type: ignore[arg-type]
+
+    return [
+        deduplicate(other_headers),
+        deduplicate(local_headers),
+        deduplicate(thirdparty_headers),
+        deduplicate(stdlib_headers),
+    ]
 
 
 def build_freethreaded() -> bool:
     """Return whether interpreter is free-threaded AND free-threading hasn't been manually overridden"""
     if sys.version_info[1] < 13:
         return False
-    return not (sys._is_gil_enabled() or "XENOFORM_DISABLE_FT" in os.environ)
+    return not (sys._is_gil_enabled() or get_config().disable_ft is not None)
+
+
+def format_cpp(code: str) -> str:
+    """Use clang-format to prettify code"""
+    cmd = [clang_format.get_executable("clang-format"), f"--style={get_config().cpp_format}"]
+    try:
+        result = subprocess.run(cmd, input=code, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"clang-format failed: {e}. module.cpp will be unformatted")
+    else:
+        code = result.stdout
+    return code

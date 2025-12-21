@@ -1,4 +1,5 @@
 import platform
+from collections.abc import Callable
 from typing import Annotated, Any
 
 import pytest
@@ -10,7 +11,7 @@ from xenoform.extension_types import CppQualifier
 from xenoform.utils import translate_function_signature
 
 
-def test_signature_translation() -> None:
+def test_signature_translation1() -> None:
     def f(_i: int) -> None:
         ""
 
@@ -50,6 +51,62 @@ def test_signature_translation() -> None:
         "[](double a, const char* b, bool c, const py::kwargs& kwargs) -> int",
         ['py::arg("a")', "py::kw_only()", 'py::arg("b")', 'py::arg("c")'],
         [],
+    )
+
+
+def test_signature_translation2() -> None:
+    def f0() -> None:
+        ""
+
+    assert translate_function_signature(f0) == (
+        "[]() -> void",
+        [],
+        [],
+    )
+
+    def f6(a: float, /, b: bool, *, c: int) -> None:
+        ""
+
+    assert translate_function_signature(f6) == (
+        "[](double a, bool b, int c) -> void",
+        ['py::arg("a")', "py::pos_only()", 'py::arg("b")', "py::kw_only()", 'py::arg("c")'],
+        [],
+    )
+
+    def f7(*, c: int) -> None:
+        ""
+
+    assert translate_function_signature(f7) == (
+        "[](int c) -> void",
+        ["py::kw_only()", 'py::arg("c")'],
+        [],
+    )
+
+    def f8(a: float, c: int, /) -> None:
+        ""
+
+    assert translate_function_signature(f8) == (
+        "[](double a, int c) -> void",
+        ['py::arg("a")', 'py::arg("c")', "py::pos_only()"],
+        [],
+    )
+
+    def f9(a: float, *, c: bool = True) -> None:
+        ""
+
+    assert translate_function_signature(f9) == (
+        "[](double a, bool c=true) -> void",
+        ['py::arg("a")', "py::kw_only()", 'py::arg("c")=true'],
+        [],
+    )
+
+    def f10(a: tuple[int, tuple[int, float]], *, value: Callable[[int, float], bool]) -> bool:  # type: ignore[empty-body]
+        ""
+
+    assert translate_function_signature(f10) == (
+        "[](std::tuple<int, std::tuple<int, double>> a, std::function<bool(int, double)> value) -> bool",
+        ['py::arg("a")', "py::kw_only()", 'py::arg("value")'],
+        ["<pybind11/stl.h>", "<pybind11/stl.h>", "<pybind11/functional.h>"],
     )
 
 

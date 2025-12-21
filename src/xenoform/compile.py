@@ -12,15 +12,17 @@ from types import ModuleType
 from typing import ParamSpec, TypeVar, cast
 
 import numpy as np
+from itrx import Itr
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 from setuptools import setup
 
+from xenoform.config import get_config
 from xenoform.cppmodule import FunctionSpec, ModuleSpec, ReturnValuePolicy
 from xenoform.errors import AnnotationError, CompilationError
 from xenoform.logger import get_logger
 from xenoform.utils import deduplicate, get_function_scope, translate_function_signature
 
-module_root_dir = Path(os.getenv("XENOFORM_EXTMODULE_ROOT", "./ext"))
+module_root_dir = get_config().module_root_dir
 
 # ensure the module directory is available to Python
 sys.path.append(str(module_root_dir))
@@ -47,7 +49,12 @@ def _get_module_checksum(module_name: str) -> str | None:
 
 def _parse_macros(macro_list: list[str]) -> dict[str, str | None]:
     """Map ["DEF1", "DEF2=3"] to {"DEF1": None, "DEF2": "3"}"""
-    return {kv[0]: kv[1] if len(kv) == 2 else None for d in macro_list for kv in [d.split("=", 1)]}
+    return (
+        Itr(macro_list)
+        .map(lambda d: d.split("="))
+        .map(lambda kv: (kv[0], kv[1] if len(kv) == 2 else None))
+        .collect(dict)
+    )
 
 
 def _check_build_fetch_module_impl(
@@ -80,6 +87,7 @@ def _check_build_fetch_module_impl(
 
         # save the code with the hash embedded
         with (module_dir / "module.cpp").open("w") as fd:
+            # can't use format as its full of { }
             fd.write(code.replace("__HASH__", str(hashval)))
 
         logger(f"wrote {module_dir}/module.cpp")
