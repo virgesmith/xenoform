@@ -2,6 +2,12 @@ version = 1
 revision = 3
 requires-python = ">=3.12"
 
+[manifest]
+members = [
+    "xenoform",
+    "xenoform-test-ext",
+]
+
 [[package]]
 name = "annotated-types"
 version = "0.7.0"
@@ -661,7 +667,7 @@ wheels = [
 
 [[package]]
 name = "xenoform"
-version = "0.1.6"
+version = "0.1.7"
 source = { editable = "." }
 dependencies = [
     { name = "clang-format" },
@@ -686,6 +692,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
     { name = "types-toml" },
+    { name = "xenoform-test-ext" },
 ]
 
 [package.metadata]
@@ -709,4 +716,10 @@ dev = [
     { name = "pytest-cov", specifier = ">=6.2.1" },
     { name = "ruff", specifier = ">=0.12.5" },
     { name = "types-toml", specifier = ">=0.10.8.20240310" },
+    { name = "xenoform-test-ext", editable = "src/test/xenoform-test-ext" },
 ]
+
+[[package]]
+name = "xenoform-test-ext"
+version = "0.1.0"
+source = { editable = "src/test/xenoform-test-ext" }

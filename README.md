@@ -308,6 +308,8 @@ In Python function arguments are always passed by "value reference" (essentially
 
 &ast; unless its a `dict`, `list`, `set` or `bytearray`
 
+NOTE: Even if using a mutable qualifier on a mutable type, any modifications to the argument in C++ will **not** propagate to python, with the exception of numpy arrays (where modifications will propagate to python regardless of the qualifier).
+
 ```py
 from typing import Annotated
 
