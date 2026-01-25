@@ -67,6 +67,14 @@ header_requirements = {
 }
 
 
+# TODO separate defaults above and custom
+def register_ext_type(pytype: type, cpptype: str) -> None:
+    """Register type mappings from other extension modules"""
+    if pytype in DEFAULT_TYPE_MAPPING:
+        raise ValueError(f"{pytype} already has a C++ mapping (to {cpptype})")
+    DEFAULT_TYPE_MAPPING[pytype] = cpptype  # type: ignore[index]
+
+
 class PyTypeTree:
     """Tree structure for python types"""
 

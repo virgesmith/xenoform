@@ -2,21 +2,15 @@ from typing import Annotated
 
 import xenoform_test_ext
 
-from xenoform import compile
-from xenoform.extension_types import DEFAULT_TYPE_MAPPING, CppQualifier
+from xenoform import compile, register_ext_type
+from xenoform.extension_types import CppQualifier
 
-
-# TODO add functionality to register bound types
-def register_type(pytype: type, cpptype: str) -> None:
-    DEFAULT_TYPE_MAPPING[pytype] = cpptype
-
-
-register_type(xenoform_test_ext.ExtClass, "ext_ns::ExtClass")
-register_type(xenoform_test_ext.vec_uint64_t, "std::vector<uint64_t>")
+register_ext_type(xenoform_test_ext.ExtClass, "ext_ns::ExtClass")
+register_ext_type(xenoform_test_ext.vec_uint64_t, "std::vector<uint64_t>")
 
 
 @compile(extra_include_paths=["../../src/test/xenoform-test-ext/include"], extra_includes=['"module.h"'])
-def make_object(n: int) -> xenoform_test_ext.ExtClass:
+def make_object(n: int) -> xenoform_test_ext.ExtClass:  # type: ignore[empty-body]
     """
     return ext_ns::ExtClass(n);
     """
@@ -45,12 +39,12 @@ def mutate_vector_ptr(vec: Annotated[xenoform_test_ext.vec_uint64_t, CppQualifie
 
 def test_ext_vector() -> None:
     vec = xenoform_test_ext.vec_uint64_t(range(10))
-    assert all(v == i for i, v in enumerate(vec))
+    assert all(v == i for i, v in enumerate(vec))  # type: ignore[arg-type, var-annotated]
     xenoform_test_ext.mutate(vec)  # increments each element
-    assert all(v == i for i, v in enumerate(vec, start=1))
+    assert all(v == i for i, v in enumerate(vec, start=1))  # type: ignore[arg-type, var-annotated]
     mutate_vector_ref(vec, 2)
     print(vec)
-    assert all(v == i for i, v in enumerate(vec, start=3))
+    assert all(v == i for i, v in enumerate(vec, start=3))  # type: ignore[arg-type, var-annotated]
     mutate_vector_ptr(vec, 2)
     print(vec)
 
