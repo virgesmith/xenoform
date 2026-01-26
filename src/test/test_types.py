@@ -5,30 +5,30 @@ import pytest
 
 from xenoform import compile
 from xenoform.errors import CppTypeError
-from xenoform.extension_types import CppQualifier, PyTypeTree, header_requirements, parse_annotation, translate_type
+from xenoform.extension_types import HEADER_REQUIREMENTS, CppQualifier, PyTypeTree, parse_annotation, translate_type
 from xenoform.utils import deduplicate
 
 
 def test_basic_types() -> None:
     cpptype = translate_type(int)
     assert str(cpptype) == "int"
-    assert not cpptype.headers(header_requirements)
+    assert not cpptype.headers(HEADER_REQUIREMENTS)
 
     cpptype = translate_type(float)
     assert str(cpptype) == "double"
-    assert not cpptype.headers(header_requirements)
+    assert not cpptype.headers(HEADER_REQUIREMENTS)
 
     cpptype = translate_type(bool)
     assert str(cpptype) == "bool"
-    assert not cpptype.headers(header_requirements)
+    assert not cpptype.headers(HEADER_REQUIREMENTS)
 
     cpptype = translate_type(str)
     assert str(cpptype) == "std::string"
-    assert cpptype.headers(header_requirements) == ["<string>"]
+    assert cpptype.headers(HEADER_REQUIREMENTS) == ["<string>"]
 
     cpptype = translate_type(bytes)
     assert str(cpptype) == "py::bytes"
-    assert not cpptype.headers(header_requirements)
+    assert not cpptype.headers(HEADER_REQUIREMENTS)
 
 
 def test_pytypetree_basic_types() -> None:
@@ -80,30 +80,30 @@ def test_pytypetree_raises_on_annotated() -> None:
 def test_specialised_types() -> None:
     cpptype = translate_type(list[int])
     assert str(cpptype) == "std::vector<int>"
-    assert cpptype.headers(header_requirements) == ["<pybind11/stl.h>"]
+    assert cpptype.headers(HEADER_REQUIREMENTS) == ["<pybind11/stl.h>"]
 
     cpptype = translate_type(list[float])
     assert str(cpptype) == "std::vector<double>"
-    assert cpptype.headers(header_requirements) == ["<pybind11/stl.h>"]
+    assert cpptype.headers(HEADER_REQUIREMENTS) == ["<pybind11/stl.h>"]
 
     cpptype = translate_type(set[str])
     assert str(cpptype) == "std::unordered_set<std::string>"
-    assert cpptype.headers(header_requirements) == ["<pybind11/stl.h>", "<string>"]
+    assert cpptype.headers(HEADER_REQUIREMENTS) == ["<pybind11/stl.h>", "<string>"]
 
     cpptype = translate_type(dict[str, list[bool]])
     assert str(cpptype) == "std::unordered_map<std::string, std::vector<bool>>"
     # pybind11/stl.h gets pulled in twice
-    assert deduplicate(cpptype.headers(header_requirements)) == ["<pybind11/stl.h>", "<string>"]
+    assert deduplicate(cpptype.headers(HEADER_REQUIREMENTS)) == ["<pybind11/stl.h>", "<string>"]
 
 
 def test_numpy_types() -> None:
     cpptype = translate_type(npt.NDArray[int])
     assert str(cpptype) == "py::array_t<int>"
-    assert cpptype.headers(header_requirements) == ["<pybind11/numpy.h>"]
+    assert cpptype.headers(HEADER_REQUIREMENTS) == ["<pybind11/numpy.h>"]
 
     cpptype = translate_type(npt.NDArray[float])
     assert str(cpptype) == "py::array_t<double>"
-    assert cpptype.headers(header_requirements) == ["<pybind11/numpy.h>"]
+    assert cpptype.headers(HEADER_REQUIREMENTS) == ["<pybind11/numpy.h>"]
 
 
 def test_user_type() -> None:

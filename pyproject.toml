@@ -76,4 +76,4 @@ members = [
 ]
 
 [tool.uv.sources]
-xenoform-test-ext = { workspace = true, editable = true }
+xenoform-test-ext = { workspace = true }

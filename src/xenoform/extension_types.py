@@ -4,12 +4,14 @@ from copy import copy
 from enum import StrEnum
 from types import EllipsisType, NoneType, UnionType
 from typing import Annotated, Any, Self, get_args, get_origin
+from warnings import deprecated
 
 import numpy as np
 
 from xenoform.errors import CppTypeError
 
 
+@deprecated("use a type override to qualify the C++ type if necessary")
 class CppQualifier(StrEnum):
     Auto = "{}"
     Ref = "{}&"
@@ -19,7 +21,7 @@ class CppQualifier(StrEnum):
     PtrC = "const {}*"  # pointer-to-const
     CPtr = "{}* const"  # const pointer
     CPtrC = "const {}* const"
-    # NB pybind11 doesnt seem to support shared/unique ptr as a function arg
+    # NB pybind11 doesn't seem to support shared/unique ptr as a function arg
 
 
 DEFAULT_TYPE_MAPPING = {
@@ -52,7 +54,7 @@ DEFAULT_TYPE_MAPPING = {
     EllipsisType: "py::ellipsis",
 }
 
-header_requirements = {
+HEADER_REQUIREMENTS = {
     "std::complex<double>": "<pybind11/complex.h>",
     "std::complex<float>": "<pybind11/complex.h>",
     "std::string": "<string>",
@@ -65,14 +67,6 @@ header_requirements = {
     "std::optional": "<pybind11/stl.h>",
     "std::function": "<pybind11/functional.h>",
 }
-
-
-# TODO separate defaults above and custom
-def register_ext_type(pytype: type, cpptype: str) -> None:
-    """Register type mappings from other extension modules"""
-    if pytype in DEFAULT_TYPE_MAPPING:
-        raise ValueError(f"{pytype} already has a C++ mapping (to {cpptype})")
-    DEFAULT_TYPE_MAPPING[pytype] = cpptype  # type: ignore[index]
 
 
 class PyTypeTree:

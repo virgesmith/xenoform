@@ -302,21 +302,42 @@ Python | C++
 
 Thus, `dict[str, list[float]]` becomes - by default -  `std::unordered_map<std::string, std::vector<double>>`
 
-### Qualifiers
+By default, only `bytearray` and `np.array` are mapped to a type that allows in-place modification. For `dict`, `list`,
+or `set` map to the corresponding pybind11 type, e.g. `py::list`.
 
-In Python function arguments are always passed by "value reference" (essentially a reassignable reference to an immutable* object), but C++ is more flexible. The default mapping uses by-value, which when objects are shallow-copied, (like numpy arrays) is often sufficient. To change this behaviour, annotate the function arguments, passing an appropriate instance of `CppQualifier`, e.g.:
+### Custom types and Qualifiers
+
+[Qualifiers have limited functionality that can be achieved through an override and may be removed in a future release]
+
+In order to use custom types implemented in C++ or [opaque types](), the must be defined in a separate extension module
+
+
+
+### remove this
+In Python function arguments are always passed by "value reference" (essentially a reassignable reference to an
+immutable* object), but C++ is more flexible. The default mapping uses by-value, which when objects are shallow-copied,
+(like numpy arrays) is often sufficient.
+
+However, even if using a mutable qualifier on a mutable type, it will likely -
+by default - be mapped to an STL type (incurring a copy), so any modifications to the argument in C++ will **not**
+propagate to python, with the exception of numpy arrays (where modifications will propagate to python regardless of the
+qualifier).
+
+For non-builtin types imported from other extmodules, register the mapping ... between the  annotate the function arguments, passing an
+appropriate instance of `CppQualifier`, e.g.:
 
 &ast; unless its a `dict`, `list`, `set` or `bytearray`
-
-NOTE: Even if using a mutable qualifier on a mutable type, any modifications to the argument in C++ will **not** propagate to python, with the exception of numpy arrays (where modifications will propagate to python regardless of the qualifier).
 
 ```py
 from typing import Annotated
 
 from xenoform import compile, CppQualifier
+from other_module import ExtType
 
-@compile()
-def do_something(text: Annotated[str, CppQualifier.CRef]) -> int:
+register_...
+
+@compile(header...)
+def do_something(text: Annotated[ExtType, CppQualifier.CRef]) -> int:
     ...
 ```
 
@@ -325,7 +346,6 @@ which will produce a function binding with this signature:
 ```cpp
 m.def("_do_something", [](const std::string& text) -> int { ...
 ```
-
 
 Available qualifiers are:
 

@@ -51,5 +51,48 @@ def test_qualifiers() -> None:
     assert vector_sum_using_rref(range(5)) == 10  # type: ignore[arg-type]
 
 
+@compile()
+def list_append_byref(v: Annotated[list[int], "py::list&"]) -> None:
+    """
+    v.append(42);
+    """
+
+
+@compile()
+def list_append_byptr(v: Annotated[list[int], "py::list* const"]) -> None:
+    """
+    v->append(43);
+    """
+
+
+@compile()
+def list_append_byval(v: Annotated[list[int], "py::list"]) -> None:
+    """
+    v.append(0);
+    """
+
+
+# TODO:
+# 1. check bytearray, list, set, dict mutable even by value
+# 2. remove CppQualifier and related tests, rename this file more appropriately
+# @compile()
+# def bytearray_mutate(b: bytearray) -> None:
+#     """
+#     for (py::handle item: v) {
+#       item += 1;
+#     }
+#     """
+
+
+def test_mutable_types() -> None:
+    x: list[int] = []
+    list_append_byval(x)  # doesnt modify x
+    assert len(x) == 1
+    assert x[-1] == 0
+    list_append_byref(x)
+    assert len(x) == 2
+    assert x[-1] == 42
+
+
 if __name__ == "__main__":
-    test_qualifiers()
+    test_mutable_types()
