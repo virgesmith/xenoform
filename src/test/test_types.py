@@ -5,7 +5,7 @@ import pytest
 
 from xenoform import compile
 from xenoform.errors import CppTypeError
-from xenoform.extension_types import HEADER_REQUIREMENTS, CppQualifier, PyTypeTree, parse_annotation, translate_type
+from xenoform.extension_types import HEADER_REQUIREMENTS, PyTypeTree, parse_annotation, translate_type
 from xenoform.utils import deduplicate
 
 
@@ -129,9 +129,9 @@ def test_parse_annotation() -> None:
     assert t is int
     assert q == {}
 
-    t, q = parse_annotation(Annotated[int, CppQualifier.CRef])  # type: ignore[arg-type]
+    t, q = parse_annotation(Annotated[int, "const int&"])  # type: ignore[arg-type]
     assert t is int
-    assert q == {"qualifier": CppQualifier.CRef}
+    assert q == {"override": "const int&"}
 
     t, q = parse_annotation(Annotated[int, "uint32_t"])  # type: ignore[arg-type]
     assert t is int
@@ -139,14 +139,6 @@ def test_parse_annotation() -> None:
 
     with pytest.raises(TypeError):
         parse_annotation(Annotated[int, 42])  # type: ignore[arg-type]
-
-
-def test_qualified_annotated_types() -> None:
-    cpptype = translate_type(Annotated[int, CppQualifier.CRef])  # type: ignore[arg-type]
-    assert str(cpptype) == "const int&"
-
-    cpptype = translate_type(Annotated[list[float], CppQualifier.CPtrC])  # type: ignore[arg-type]
-    assert str(cpptype) == "const std::vector<double>* const"
 
 
 def test_overridden_annotated_types() -> None:

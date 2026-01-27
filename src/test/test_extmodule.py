@@ -19,22 +19,22 @@ def mutate_object(obj: Annotated[xenoform_test_ext.ExtClass, "ext_ns::ExtClass&"
     """
 
 
-@compile(extra_include_paths=["src/test/xenoform_test_ext/include"], extra_includes=['"module.h"'])
+@compile()
 def mutate_vector_val(vec: Annotated[xenoform_test_ext.vec_uint64_t, "std::vector<uint64_t>"], n: int) -> None:
     """
     for (auto& i: vec) i += n;
     """
 
 
-@compile(extra_include_paths=["src/test/xenoform_test_ext/include"], extra_includes=['"module.h"'])
+@compile()
 def mutate_vector_ref(vec: Annotated[xenoform_test_ext.vec_uint64_t, "std::vector<uint64_t>&"], n: int) -> None:
     """
     for (auto& i: vec) i += n;
     """
 
 
-@compile(extra_include_paths=["src/test/xenoform_test_ext/include"], extra_includes=['"module.h"'])
-def mutate_vector_ptr(vec: Annotated[xenoform_test_ext.vec_uint64_t, "std::vector<uint64_t>* const"], n: int) -> None:
+@compile()
+def mutate_vector_ptr(vec: Annotated[xenoform_test_ext.vec_uint64_t, "std::vector<uint64_t>*"], n: int) -> None:
     """
     for (auto& i: *vec) i += n;
     """

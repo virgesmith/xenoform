@@ -7,7 +7,6 @@ import pytest
 from xenoform import CompilationError, CppTypeError, Platform, platform_specific
 from xenoform.compile import _check_build_fetch_module_impl, _parse_macros, compile
 from xenoform.cppmodule import FunctionSpec, ModuleSpec, ReturnValuePolicy
-from xenoform.extension_types import CppQualifier
 from xenoform.utils import translate_function_signature
 
 
@@ -26,13 +25,13 @@ def test_signature_translation1() -> None:
         ["<string>"],
     )
 
-    def f3(a: float, b: Annotated[str, CppQualifier.CRef], c: bool) -> int:  # type: ignore[empty-body]
+    def f3(a: float, b: Annotated[str, "const std::string&"], c: bool) -> int:  # type: ignore[empty-body]
         ""
 
     assert translate_function_signature(f3) == (
         "[](double a, const std::string& b, bool c) -> int",
         ['py::arg("a")', 'py::arg("b")', 'py::arg("c")'],
-        ["<string>"],
+        [],  # override means <string> must be manually added
     )
 
     def f4(a: float, b: Annotated[str, "const char*"], c: bool) -> int:  # type: ignore[empty-body]
@@ -143,7 +142,7 @@ def test_basic() -> None:
 
 
 @compile()
-def incref(i: Annotated[int, CppQualifier.Ref]) -> None:
+def incref(i: Annotated[int, "int&"]) -> None:
     """
     ++i;
     """
@@ -151,7 +150,7 @@ def incref(i: Annotated[int, CppQualifier.Ref]) -> None:
 
 def test_ref() -> None:
     i = 1
-    incref(i)  # i is immutable
+    incref(i)  # i is immutable, incref gets a ref to a copy
     assert i == 1
 
 

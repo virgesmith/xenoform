@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from xenoform import compile
-from xenoform.extension_types import CppQualifier, translate_type
+from xenoform.extension_types import translate_type
 
 
 def test_translate_compound_types() -> None:
@@ -10,17 +10,12 @@ def test_translate_compound_types() -> None:
     assert str(translate_type(Annotated[int | float, "double"])) == "double"  # type: ignore[arg-type]
     assert str(translate_type(Annotated[int | None, "py::object"])) == "py::object"  # type: ignore[arg-type]
     assert str(translate_type(int | float | None)) == "std::optional<std::variant<int, double>>"  # type: ignore[arg-type]
-    assert (
-        str(translate_type(Annotated[int | float | None, CppQualifier.CRef]))  # type: ignore[arg-type]
-        == "const std::optional<std::variant<int, double>>&"
-    )
 
 
 @compile()
-def union_type(x: Annotated[int | str, CppQualifier.CRef]) -> str:  # type: ignore[empty-body]
+def union_type(x: Annotated[int | str, "const std::variant<int, std::string>&"]) -> str:  # type: ignore[empty-body]
     """
     return std::holds_alternative<int>(x) ? std::to_string(std::get<int>(x)) : std::get<std::string>(x);
-
     """
 
 

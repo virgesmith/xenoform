@@ -303,88 +303,67 @@ Python | C++
 Thus, `dict[str, list[float]]` becomes - by default -  `std::unordered_map<std::string, std::vector<double>>`
 
 By default, only `bytearray` and `np.array` are mapped to a type that allows in-place modification. For `dict`, `list`,
-or `set` map to the corresponding pybind11 type, e.g. `py::list`.
+or `set` map to the corresponding pybind11 type, e.g. `py::list` (see below).
 
-### Custom types and Qualifiers
+### Custom Type Mappings and Qualifiers
 
-[Qualifiers have limited functionality that can be achieved through an override and may be removed in a future release]
+The mapping of types above is not exhaustive and there may be a number of reasons for requiring a new or different
+mapping. Some examples:
 
-In order to use custom types implemented in C++ or [opaque types](), the must be defined in a separate extension module
+- to restrict inputs to narrower C++ types. E.g. use an unsigned type:
 
+    ```py
+    from typing import Annotated
 
+    from xenoform import compile
 
-### remove this
-In Python function arguments are always passed by "value reference" (essentially a reassignable reference to an
-immutable* object), but C++ is more flexible. The default mapping uses by-value, which when objects are shallow-copied,
-(like numpy arrays) is often sufficient.
+    @compile()
+    def fibonacci(n: Annotated[int, "uint64_t"]) -> Annotated[int, "uint64_t"]:
+        ...
+    ```
 
-However, even if using a mutable qualifier on a mutable type, it will likely -
-by default - be mapped to an STL type (incurring a copy), so any modifications to the argument in C++ will **not**
-propagate to python, with the exception of numpy arrays (where modifications will propagate to python regardless of the
-qualifier).
+- there is no explicit C++ type, e.g. `pd.Series`. This example is covered in the performance section [above](#loops).
 
-For non-builtin types imported from other extmodules, register the mapping ... between the  annotate the function arguments, passing an
-appropriate instance of `CppQualifier`, e.g.:
+- a different mapping to the default is required - e.g. for in-place modification of a list:
 
-&ast; unless its a `dict`, `list`, `set` or `bytearray`
+    ```py
+    @compile()
+    def mutate_list(a: Annotated[list[int], "py::list"]) -> None:
+        """
+        a.append(42);
+        """
+    ```
 
-```py
-from typing import Annotated
+    Note that the argument is passed *by value* - like `np.array` it is shallow-copied, so no requirement for pointers or references. Consult the
+    [pybind11 documentation](https://pybind11.readthedocs.io/en/stable/reference.html) for more info.
 
-from xenoform import compile, CppQualifier
-from other_module import ExtType
+- the type is a bound C++ object from a separate extension module. In-place modification may also be required. The type
+override must be provided, as well as a header file for the C++ definition:
 
-register_...
+    ```py
+    from other_ext import ExtObj
 
-@compile(header...)
-def do_something(text: Annotated[ExtType, CppQualifier.CRef]) -> int:
-    ...
-```
+    @compile(extra_include_paths=["path_to_other_ext_include"], extra_includes=['"extobj.h"'])
+    def mutate_ext_object(obj: Annotated[ExtObj, "ExtObj&"], n: int) -> None:
+        """
+        obj.set(n);
+        """
+    ```
 
-which will produce a function binding with this signature:
+    See test_extmodule.py for more examples.
 
-```cpp
-m.def("_do_something", [](const std::string& text) -> int { ...
-```
+- an [opaque type](https://pybind11.readthedocs.io/en/stable/advanced/cast/stl.html#making-opaque-types) is required,
+e.g. for exposing STL containers directly to python. This must be registered in a separate module, and the C++ type must be known, but can be qualified as necessary. Here we modify it through a pointer:
 
-Available qualifiers are:
+    ```py
+    from other_ext import UIntVector
 
-Qualifier | C++
-----------|----
-`Auto` | `T` (no modification)
-`Ref` | `T&`
-`CRef` | `const T&`
-`RRef` | `T&&`
-`Ptr` | `T*`
-`PtrC` | `const T*` (pointer-to-const)
-`CPtr` | `T* const` (const pointer)
-`CPtrC` | `const T* const`
-
-(NB pybind11 does not appear to support `std::shared_ptr` or `std::unique_ptr` as function arguments)
-
-
-### Overriding
-
-In some circumstances, you may want to provide a custom mapping. This is done by passing the required C++ type (as a string) in the annotation. For example, to restrict integer inputs and outputs to non-negative values, use an unsigned type:
-
-```py
-from typing import Annotated
-
-from xenoform import compile
-
-@compile()
-def fibonacci(n: Annotated[int, "uint64_t"]) -> Annotated[int, "uint64_t"]:
-    ...
-```
-
-Other use cases for overriding:
-- for types that are not known to pybind11 or C++ but you want to make the function's intent clear: e.g.
-`Annotated[pd.Series, "py::object"]` (rather than the uninformative `Any`)
-- for compound (optional and union) types when you want to access them as a generic python object
-rather than via the default mapping - which uses the `std::optional` and `std::variant` templates.
-
-NB. Nested Annotated types (e.g. `Annotated[list[Annotated[int, "size_t"]], CppQualifier.CRef]`) are not currently
-supported. A workaround is to annotate the entire type, e.g. `Annotated[list[int], "const std::vector<size_t>&"]`
+    @compile()
+    def mutate_uint_vector_ptr(vec: Annotated[UIntVector, "std::vector<uint64_t>*"], n: int) -> None:
+        """
+        for (auto& i: *vec) i += n;
+        """
+    ```
 
 ## Callable Types
 
