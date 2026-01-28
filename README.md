@@ -41,8 +41,8 @@ box may vary, e.g. on a mac, you may need to manually `brew install libomp` for 
 - Supports `*args` and `**kwargs`, mapped  (respectively) to `py::args` and `py::kwargs`. NB type annotations for these
 types are still useful for python type checkers.
 - Using annotated types, you can:
-    - qualify C++ arguments by value, reference, or (dumb) pointer, with or without `const`
     - override the default mapping of python types to C++ types
+    - where necessary, qualify C++ arguments by value, reference, or (dumb) pointer, with or without `const`
 - Automatically includes (minimal) required headers for compilation, according the function signatures in the module.
 If necessary, headers (and include paths) can be added manually.
 - Callable types are supported both as arguments and return values. See [below](#callable-types).
@@ -172,7 +172,8 @@ Full code is in [examples/loop.py](./examples/loop.py).
 
 ### `numpy` and vectorised operations
 
-> "vectorisation" in this sense means implementing loops in compiled, rather than interpreted, code. In fact, the C++ implementation below also uses optimisations including "true" vectorisation (meaning hardware SIMD instructions).
+> "vectorisation" in this sense means implementing loops in compiled - rather than interpreted - code. In fact, the C++
+implementation below also uses "true" vectorisation (meaning hardware SIMD instructions) as well as other optimisations.
 
 For "standard" linear algebra and array operations, implementations in *xenoform* are very unlikely to improve on heavily
 optimised numpy implementations, such as matrix multiplication.
