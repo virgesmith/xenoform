@@ -299,11 +299,12 @@ Python | C++
 `Callable` | `std::function`
 `...` | `py::ellipsis`
 
+Thus, `dict[str, list[float]]` becomes - by default -  `std::unordered_map<std::string, std::vector<double>>`. Also,
+any C++ headers required to define the mapped type will be automatically #include'd in the module source code.
 
-Thus, `dict[str, list[float]]` becomes - by default -  `std::unordered_map<std::string, std::vector<double>>`
-
-By default, only `bytearray` and `np.array` are mapped to a type that allows in-place modification. For `dict`, `list`,
-or `set` map to the corresponding pybind11 type, e.g. `py::list` (see below).
+By default, only `np.array` is mapped to a type that supports in-place modification. For `dict`, `list`,
+or `set` map to the corresponding pybind11 type, e.g. `py::list` (see below). Note also `py::bytearray` has no mutable
+methods.
 
 ### Custom Type Mappings and Qualifiers
 
@@ -358,12 +359,14 @@ e.g. for exposing STL containers directly to python. This must be registered in 
     ```py
     from other_ext import UIntVector
 
-    @compile()
+    @compile(extra_includes=["<pybind11/stl.h>"])
     def mutate_uint_vector_ptr(vec: Annotated[UIntVector, "std::vector<uint64_t>*"], n: int) -> None:
         """
         for (auto& i: *vec) i += n;
         """
     ```
+
+    Note we had to manually specify an extra header file.
 
 ## Callable Types
 
