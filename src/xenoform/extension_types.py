@@ -1,26 +1,12 @@
 # dummy generic types for references and pointers
 from collections.abc import Callable
 from copy import copy
-from enum import StrEnum
 from types import EllipsisType, NoneType, UnionType
 from typing import Annotated, Any, Self, get_args, get_origin
 
 import numpy as np
 
 from xenoform.errors import CppTypeError
-
-
-class CppQualifier(StrEnum):
-    Auto = "{}"
-    Ref = "{}&"
-    CRef = "const {}&"
-    RRef = "{}&&"
-    Ptr = "{}*"
-    PtrC = "const {}*"  # pointer-to-const
-    CPtr = "{}* const"  # const pointer
-    CPtrC = "const {}* const"
-    # NB pybind11 doesnt seem to support shared/unique ptr as a function arg
-
 
 DEFAULT_TYPE_MAPPING = {
     None: "void",  # py::none?
@@ -52,7 +38,7 @@ DEFAULT_TYPE_MAPPING = {
     EllipsisType: "py::ellipsis",
 }
 
-header_requirements = {
+HEADER_REQUIREMENTS = {
     "std::complex<double>": "<pybind11/complex.h>",
     "std::complex<float>": "<pybind11/complex.h>",
     "std::string": "<string>",
@@ -95,12 +81,11 @@ class PyTypeTree:
 class CppTypeTree:
     """Mapped tree structure for C++ types"""
 
-    def __init__(self, tree: PyTypeTree, *, override: str | None = None, qualifier: CppQualifier | None = None) -> None:
+    def __init__(self, tree: PyTypeTree, *, override: str | None = None) -> None:
         self.type = DEFAULT_TYPE_MAPPING.get(tree.type)  # type: ignore[arg-type]
         if not self.type and not override:
             raise CppTypeError(f"Don't know a C++ type for '{tree.type}' and no override provided")
         self.override = override
-        self.qualfier = qualifier
         # special treatment for numpy arrays
         if tree.type == np.ndarray:
             self.subtypes: tuple[CppTypeTree, ...] = (CppTypeTree(tree.subtypes[1].subtypes[0]),)
@@ -112,7 +97,6 @@ class CppTypeTree:
                 # T | U | None -> std::optional<std::variant<T, U>>
                 subtype = copy(self)
                 subtype.override = None
-                subtype.qualfier = None
                 self.subtypes = (subtype,)
             self.type = "std::optional"
 
@@ -124,8 +108,6 @@ class CppTypeTree:
             t = t + f"<{self.subtypes[0]}({', '.join(repr(t) for t in self.subtypes[1:])})>"
         elif self.subtypes:
             t = t + f"<{', '.join(repr(t) for t in self.subtypes)}>"
-        if self.qualfier:
-            t = self.qualfier.format(t)
         return t
 
     def headers(self, mapping: dict[str, str], _collected: list[str] | None = None) -> list[str]:
@@ -144,7 +126,8 @@ class CppTypeTree:
         return _collected
 
 
-def parse_annotation(origin: type) -> tuple[type, dict[str, CppQualifier] | dict[str, str]]:
+# TODO dict->str|None
+def parse_annotation(origin: type) -> tuple[type, dict[str, str]]:
     """
     Extract content from Annotation, if present
     """
@@ -154,9 +137,6 @@ def parse_annotation(origin: type) -> tuple[type, dict[str, CppQualifier] | dict
     if t is Annotated:
         base, *extras = get_args(origin)
         assert len(extras) == 1, "one and only one annotation must be specified"
-        # CppQualifier subclasses str so check this first
-        if isinstance(extras[0], CppQualifier):
-            return base, {"qualifier": extras[0]}
         if isinstance(extras[0], str):
             return base, {"override": extras[0]}
         raise TypeError(f"Unexpected extra for {base}: {extras[0]}({type(extras[0])})")

@@ -6,8 +6,8 @@
 
 Write and execute superfast C or C++ inside your Python code! Here's how...
 
-Write a type-annotated function or method definition **in python**, add the `compile` decorator and put the **C++**
-implementation in a docstr:
+Write a type-annotated function or method definition **in python**, add the `compile` decorator and put the **C++
+implementation** in a docstr:
 
 ```py
 import xenoform
@@ -17,9 +17,9 @@ def max(i: int, j: int) -> int:  # type: ignore[empty-body]
     "return i > j ? i : j;"
 ```
 
-When Python loads this file, the source for an extension module is generated with all functions using this decorator.
-The first time any function is called, the module is built, and the attribute corresponding to the (empty) Python
-function is replaced with the C++ implementation in the module.
+When Python loads this file, all functions using this decorator have their function signatures are translated to C++
+and the source for an extension module is generated. The first time any function is called, the module is built, and
+the attribute corresponding to the (empty) Python function is replaced with the C++ implementation in the module.
 
 Subsequent calls to the function incur minimal overhead, as the attribute corresponding to the (dummy) python function
 now points to the C++ implementation.
@@ -41,15 +41,17 @@ box may vary, e.g. on a mac, you may need to manually `brew install libomp` for 
 - Supports `*args` and `**kwargs`, mapped  (respectively) to `py::args` and `py::kwargs`. NB type annotations for these
 types are still useful for python type checkers.
 - Using annotated types, you can:
-    - qualify C++ arguments by value, reference, or (dumb) pointer, with or without `const`
     - override the default mapping of python types to C++ types
+    - where necessary, qualify C++ arguments by value, reference, or (dumb) pointer, with or without `const`
 - Automatically includes (minimal) required headers for compilation, according the function signatures in the module.
 If necessary, headers (and include paths) can be added manually.
 - Callable types are supported both as arguments and return values. See [below](#callable-types).
 - Compound types are supported, by mapping (by default) to `std::optional` / `std::variant`
 - Custom macros and extra headers/compiler/linker commands can be added as necessary
-- Can link to separate C++ sources, prebuilt libraries, see [test_external_source.py](src/test/test_external_source.py) [test_external_static.py](src/test/test_external_static.py) and
-[test_external_shared.py](src/test/test_external_shared.py) for details.
+- Can link to separate C++ sources, prebuilt libraries, and even other extension modules. See
+[test_external_source.py](src/test/test_external_source.py) [test_external_static.py](src/test/test_external_static.py),
+[test_external_shared.py](src/test/test_external_shared.py) and [test_extmodule.py](src/test/test_extmodule.py) for
+details.
 - Supports pybind11's [return value policies](https://pybind11.readthedocs.io/en/stable/advanced/functions.html#return-value-policies)
 
 Caveats & points to note:
@@ -80,7 +82,8 @@ delete the ext module
 
 ## Usage
 
-Decorate your C++ functions with `compile` decorator factory - it handles all the configuration and compilation. It can be customised thus:
+Simply decorate your C++ functions with the `compile` decorator factory - it handles all the configuration and
+compilation. It can be customised with these optional parameters:
 
 kwarg | type(=default) | description
 ------|----------------|------------
@@ -172,7 +175,9 @@ Full code is in [examples/loop.py](./examples/loop.py).
 
 ### `numpy` and vectorised operations
 
-> "vectorisation" in this sense means implementing loops in compiled, rather than interpreted, code. In fact, the C++ implementation below also uses optimisations including "true" vectorisation (meaning hardware SIMD instructions).
+> "vectorisation" in this sense means implementing loops in compiled - rather than interpreted - code. In fact, the C++
+implementation below also various optimisations including but by no means limited to "true" vectorisation (meaning
+hardware SIMD instructions).
 
 For "standard" linear algebra and array operations, implementations in *xenoform* are very unlikely to improve on heavily
 optimised numpy implementations, such as matrix multiplication.
@@ -299,70 +304,74 @@ Python | C++
 `Callable` | `std::function`
 `...` | `py::ellipsis`
 
+Thus, `dict[str, list[float]]` becomes - by default -  `std::unordered_map<std::string, std::vector<double>>`. Also,
+any C++ headers required to define the mapped type will be automatically #include'd in the module source code.
 
-Thus, `dict[str, list[float]]` becomes - by default -  `std::unordered_map<std::string, std::vector<double>>`
+By default, only `np.array` is mapped to a type that supports in-place modification. For `dict`, `list`,
+or `set` map to the corresponding pybind11 type, e.g. `py::list` (see below). Note also `py::bytearray` has no mutable
+methods.
 
-### Qualifiers
+### Custom Type Mappings and Qualifiers
 
-In Python function arguments are always passed by "value reference" (essentially a reassignable reference to an immutable* object), but C++ is more flexible. The default mapping uses by-value, which when objects are shallow-copied, (like numpy arrays) is often sufficient. To change this behaviour, annotate the function arguments, passing an appropriate instance of `CppQualifier`, e.g.:
+The mapping of types above is not exhaustive and there may be a number of reasons for requiring a new or different
+mapping. Some examples:
 
-&ast; unless its a `dict`, `list`, `set` or `bytearray`
+- to restrict inputs to narrower C++ types. E.g. use an unsigned type:
 
-```py
-from typing import Annotated
+    ```py
+    from typing import Annotated
 
-from xenoform import compile, CppQualifier
+    from xenoform import compile
 
-@compile()
-def do_something(text: Annotated[str, CppQualifier.CRef]) -> int:
-    ...
-```
+    @compile()
+    def fibonacci(n: Annotated[int, "uint64_t"]) -> Annotated[int, "uint64_t"]:
+        ...
+    ```
 
-which will produce a function binding with this signature:
+- there is no explicit C++ type, e.g. `pd.Series`. This example is covered in the performance section [above](#loops).
 
-```cpp
-m.def("_do_something", [](const std::string& text) -> int { ...
-```
+- a different mapping to the default is required - e.g. for in-place modification of a list:
 
+    ```py
+    @compile()
+    def mutate_list(a: Annotated[list[int], "py::list"]) -> None:
+        """
+        a.append(42);
+        """
+    ```
 
-Available qualifiers are:
+    Note that the argument is passed *by value* - like `np.array` it is shallow-copied, so no requirement for pointers or references. Consult the
+    [pybind11 documentation](https://pybind11.readthedocs.io/en/stable/reference.html) for more info.
 
-Qualifier | C++
-----------|----
-`Auto` | `T` (no modification)
-`Ref` | `T&`
-`CRef` | `const T&`
-`RRef` | `T&&`
-`Ptr` | `T*`
-`PtrC` | `const T*` (pointer-to-const)
-`CPtr` | `T* const` (const pointer)
-`CPtrC` | `const T* const`
+- the type is a bound C++ object from a separate extension module. In-place modification may also be required. The type
+override must be provided, as well as a header file for the C++ definition:
 
-(NB pybind11 does not appear to support `std::shared_ptr` or `std::unique_ptr` as function arguments)
+    ```py
+    from other_ext import ExtObj
 
+    @compile(extra_include_paths=["path_to_other_ext_include"], extra_includes=['"extobj.h"'])
+    def mutate_ext_object(obj: Annotated[ExtObj, "ExtObj&"], n: int) -> None:
+        """
+        obj.set(n);
+        """
+    ```
 
-### Overriding
+    See test_extmodule.py for more examples.
 
-In some circumstances, you may want to provide a custom mapping. This is done by passing the required C++ type (as a string) in the annotation. For example, to restrict integer inputs and outputs to non-negative values, use an unsigned type:
+- an [opaque type](https://pybind11.readthedocs.io/en/stable/advanced/cast/stl.html#making-opaque-types) is required,
+e.g. for exposing STL containers directly to python. This must be registered in a separate module, and the C++ type must be known, but can be qualified as necessary. Here we modify it through a pointer:
 
-```py
-from typing import Annotated
+    ```py
+    from other_ext import UIntVector
 
-from xenoform import compile
+    @compile(extra_includes=["<pybind11/stl.h>"])
+    def mutate_uint_vector_ptr(vec: Annotated[UIntVector, "std::vector<uint64_t>*"], n: int) -> None:
+        """
+        for (auto& i: *vec) i += n;
+        """
+    ```
 
-@compile()
-def fibonacci(n: Annotated[int, "uint64_t"]) -> Annotated[int, "uint64_t"]:
-    ...
-```
-
-Other use cases for overriding:
-- for types that are not known to pybind11 or C++ but you want to make the function's intent clear: e.g.
-`Annotated[pd.Series, "py::object"]` (rather than the uninformative `Any`)
-- for compound (optional and union) types when you want to access them as a generic python object
-rather than via the default mapping - which uses the `std::optional` and `std::variant` templates.
-
-NB. Nested Annotated types (e.g. `Annotated[list[Annotated[int, "size_t"]], CppQualifier.CRef]`) are not currently
-supported. A workaround is to annotate the entire type, e.g. `Annotated[list[int], "const std::vector<size_t>&"]`
+    Note we had to manually specify an extra header file.
 
 ## Callable Types
 

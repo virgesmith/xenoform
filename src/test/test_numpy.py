@@ -4,11 +4,10 @@ import numpy as np
 import numpy.typing as npt
 
 from xenoform.compile import compile
-from xenoform.extension_types import CppQualifier
 
 
 @compile()
-def by_ref(a: Annotated[npt.NDArray[np.float64], CppQualifier.Ref]) -> None:
+def by_ref(a: Annotated[npt.NDArray[np.float64], "py::array_t<double>&"]) -> None:
     """
     auto r = a.mutable_unchecked<2>();
     r(0, 0) = 1.0;

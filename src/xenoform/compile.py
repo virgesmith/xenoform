@@ -22,10 +22,10 @@ from xenoform.errors import AnnotationError, CompilationError
 from xenoform.logger import get_logger
 from xenoform.utils import deduplicate, get_function_scope, translate_function_signature
 
-module_root_dir = get_config().module_root_dir
+extmodule_root = get_config().extmodule_root
 
 # ensure the module directory is available to Python
-sys.path.append(str(module_root_dir))
+sys.path.append(str(extmodule_root))
 
 logger = get_logger()
 
@@ -63,18 +63,18 @@ def _check_build_fetch_module_impl(
 ) -> ModuleType:
     ext_name = module_name + "_ext"
 
-    module_dir = module_root_dir / ext_name
+    module_dir = extmodule_root / ext_name
     module_dir.mkdir(exist_ok=True, parents=True)
 
     code, hashval = module_spec.make_source(module_name)
 
     # if a built module already exists, and matches the hash of the source code, just use it
-    module_checksum = _get_module_checksum(f"{module_root_dir.name}.{ext_name}.{module_name}")
+    module_checksum = _get_module_checksum(f"{extmodule_root.name}.{ext_name}.{module_name}")
 
     # assume exists and up-to-date
     exists, outdated = True, False
     if not module_checksum:
-        logger(f"module {module_root_dir.name}.{ext_name}.{module_name} not found")
+        logger(f"module {extmodule_root.name}.{ext_name}.{module_name} not found")
         exists = False
     elif module_checksum != hashval:
         logger(f"module is outdated ({hashval})")
@@ -83,7 +83,7 @@ def _check_build_fetch_module_impl(
         logger(f"module is up-to-date ({hashval})")
 
     if outdated or not exists:
-        logger(f"(re)building module {module_root_dir.name}.{ext_name}.{module_name}")
+        logger(f"(re)building module {extmodule_root.name}.{ext_name}.{module_name}")
 
         # save the code with the hash embedded
         with (module_dir / "module.cpp").open("w") as fd:
@@ -104,7 +104,7 @@ def _check_build_fetch_module_impl(
             )
         ]
 
-        logger(f"building {module_root_dir.name}.{ext_name}.{module_name}...")
+        logger(f"building {extmodule_root.name}.{ext_name}.{module_name}...")
         cwd = Path.cwd()
         try:
             os.chdir(module_dir)
@@ -122,7 +122,7 @@ def _check_build_fetch_module_impl(
         finally:
             os.chdir(cwd)
         importlib.invalidate_caches()  # without this, newly built modules are not found
-        logger(f"built {module_root_dir.name}.{ext_name}.{module_name}")
+        logger(f"built {extmodule_root.name}.{ext_name}.{module_name}")
     return importlib.import_module(f"{ext_name}.{module_name}")
 
 
@@ -204,7 +204,7 @@ def compile(
         module_name = f"{Path(inspect.getfile(func)).stem}"
         function_body = sig + " {" + (func.__doc__ or "") + "}"
 
-        logger(f"registering {module_name}_ext.{module_name}.{func.__name__} (in {module_root_dir})")
+        logger(f"registering {module_name}_ext.{module_name}.{func.__name__} (in {extmodule_root})")
 
         if vectorise:
             function_body = f"py::vectorize({function_body})"

@@ -12,7 +12,7 @@ import clang_format  # type: ignore[import-untyped]
 from itrx import Itr
 
 from xenoform.config import get_config
-from xenoform.extension_types import header_requirements, translate_type
+from xenoform.extension_types import HEADER_REQUIREMENTS, translate_type
 
 Platform = Literal["Linux", "Darwin", "Windows"]
 Platforms = list[Platform] | None
@@ -64,7 +64,7 @@ def translate_function_signature(func: Callable[..., Any]) -> tuple[str, list[st
     ret: str | None = None
     for var_name, type_ in arg_spec.annotations.items():
         cpptype = translate_type(type_)
-        headers.extend(cpptype.headers(header_requirements))
+        headers.extend(cpptype.headers(HEADER_REQUIREMENTS))
         if var_name == "return":
             ret = str(cpptype)
         else:

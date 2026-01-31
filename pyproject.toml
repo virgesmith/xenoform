@@ -1,6 +1,6 @@
 [project]
 name = "xenoform"
-version = "0.1.6"
+version = "0.1.7"
 description = "Inlined C++ functions"
 readme = "README.md"
 authors = [
@@ -46,6 +46,7 @@ dev = [
     "pytest-cov>=6.2.1",
     "ruff>=0.12.5",
     "types-toml>=0.10.8.20240310",
+    "xenoform-test-ext",
 ]
 
 [tool.pytest.ini_options]
@@ -67,3 +68,12 @@ ignore = ["E501"]
 [tool.mypy]
 strict = true
 disallow_untyped_defs = true
+
+[tool.uv.workspace]
+members = [
+    "src/test/extmodule",
+    "src/test/xenoform-test-ext",
+]
+
+[tool.uv.sources]
+xenoform-test-ext = { workspace = true }
