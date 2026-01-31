@@ -6,8 +6,8 @@
 
 Write and execute superfast C or C++ inside your Python code! Here's how...
 
-Write a type-annotated function or method definition **in python**, add the `compile` decorator and put the **C++**
-implementation in a docstr:
+Write a type-annotated function or method definition **in python**, add the `compile` decorator and put the **C++
+implementation** in a docstr:
 
 ```py
 import xenoform
@@ -17,9 +17,9 @@ def max(i: int, j: int) -> int:  # type: ignore[empty-body]
     "return i > j ? i : j;"
 ```
 
-When Python loads this file, the source for an extension module is generated with all functions using this decorator.
-The first time any function is called, the module is built, and the attribute corresponding to the (empty) Python
-function is replaced with the C++ implementation in the module.
+When Python loads this file, all functions using this decorator have their function signatures are translated to C++
+and the source for an extension module is generated. The first time any function is called, the module is built, and
+the attribute corresponding to the (empty) Python function is replaced with the C++ implementation in the module.
 
 Subsequent calls to the function incur minimal overhead, as the attribute corresponding to the (dummy) python function
 now points to the C++ implementation.
@@ -48,8 +48,10 @@ If necessary, headers (and include paths) can be added manually.
 - Callable types are supported both as arguments and return values. See [below](#callable-types).
 - Compound types are supported, by mapping (by default) to `std::optional` / `std::variant`
 - Custom macros and extra headers/compiler/linker commands can be added as necessary
-- Can link to separate C++ sources, prebuilt libraries, see [test_external_source.py](src/test/test_external_source.py) [test_external_static.py](src/test/test_external_static.py) and
-[test_external_shared.py](src/test/test_external_shared.py) for details.
+- Can link to separate C++ sources, prebuilt libraries, and even other extension modules. See
+[test_external_source.py](src/test/test_external_source.py) [test_external_static.py](src/test/test_external_static.py),
+[test_external_shared.py](src/test/test_external_shared.py) and [test_extmodule.py](src/test/test_extmodule.py) for
+details.
 - Supports pybind11's [return value policies](https://pybind11.readthedocs.io/en/stable/advanced/functions.html#return-value-policies)
 
 Caveats & points to note:
@@ -80,7 +82,8 @@ delete the ext module
 
 ## Usage
 
-Decorate your C++ functions with `compile` decorator factory - it handles all the configuration and compilation. It can be customised thus:
+Simply decorate your C++ functions with the `compile` decorator factory - it handles all the configuration and
+compilation. It can be customised with these optional parameters:
 
 kwarg | type(=default) | description
 ------|----------------|------------
@@ -173,7 +176,8 @@ Full code is in [examples/loop.py](./examples/loop.py).
 ### `numpy` and vectorised operations
 
 > "vectorisation" in this sense means implementing loops in compiled - rather than interpreted - code. In fact, the C++
-implementation below also uses "true" vectorisation (meaning hardware SIMD instructions) as well as other optimisations.
+implementation below also various optimisations including but by no means limited to "true" vectorisation (meaning
+hardware SIMD instructions).
 
 For "standard" linear algebra and array operations, implementations in *xenoform* are very unlikely to improve on heavily
 optimised numpy implementations, such as matrix multiplication.

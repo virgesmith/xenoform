@@ -3,7 +3,7 @@ namespace ext_ns {
 
 class ExtClass {
 public:
-  ExtClass(int i) : i{i} { }
+  ExtClass(int i) : i{i} {}
 
   int get() { return i; }
 
@@ -13,4 +13,4 @@ private:
   int i;
 };
 
-}
+} // namespace ext_ns
