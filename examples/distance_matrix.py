@@ -10,7 +10,7 @@ from xenoform import compile
 
 def calc_dist_matrix_py(p: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     "Compute distance matrix from points, using numpy"
-    return np.sqrt(((p[:, np.newaxis, :] - p[np.newaxis, :, :]) ** 2).sum(axis=2))  # ty: ignore[no-any-return]
+    return np.sqrt(((p[:, np.newaxis, :] - p[np.newaxis, :, :]) ** 2).sum(axis=2))
 
 
 @compile(extra_compile_args=["-fopenmp"], extra_link_args=["-fopenmp"])

@@ -1,5 +1,6 @@
 from typing import Annotated
 
+import numpy as np
 import numpy.typing as npt
 import pytest
 
@@ -97,11 +98,11 @@ def test_specialised_types() -> None:
 
 
 def test_numpy_types() -> None:
-    cpptype = translate_type(npt.NDArray[int])
+    cpptype = translate_type(npt.NDArray[np.int32])
     assert str(cpptype) == "py::array_t<int>"
     assert cpptype.headers(HEADER_REQUIREMENTS) == ["<pybind11/numpy.h>"]
 
-    cpptype = translate_type(npt.NDArray[float])
+    cpptype = translate_type(npt.NDArray[np.float64])
     assert str(cpptype) == "py::array_t<double>"
     assert cpptype.headers(HEADER_REQUIREMENTS) == ["<pybind11/numpy.h>"]
 

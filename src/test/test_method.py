@@ -77,10 +77,10 @@ def test_method() -> None:
 
 def test_method_incorrect_usage() -> None:
     with pytest.raises(TypeError):
-        ClassA.method()  # ty: ignore[call-arg]
+        ClassA.method()  # ty: ignore[missing-argument]
     # C++ impl should raise same error type as python
     with pytest.raises(TypeError):
-        ClassB.method()  # ty: ignore[call-arg]
+        ClassB.method()  # ty: ignore[missing-argument]
 
 
 def test_class_method() -> None:
@@ -97,5 +97,5 @@ def test_class_method() -> None:
 def test_static_method() -> None:
     b = ClassB()
     with pytest.raises(AttributeError):
-        ClassA.static_method(6)  # ty: ignore[attr-defined]
+        ClassA.static_method(6)  # ty: ignore[unresolved-attribute]
     assert ClassB.static_method(6) == b.static_method(6) == 1006

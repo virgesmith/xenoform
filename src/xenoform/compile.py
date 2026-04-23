@@ -155,7 +155,7 @@ def _check_annotations[**P, R](func: Callable[P, R]) -> None:
 def _get_function(module_name: str, function_name: str) -> Callable[P, R]:
     module = _get_module(module_name)
     logger(f"redirected {module_name}.{function_name[1:]} to compiled function {module.__name__}.{function_name}")
-    return cast(Callable[P, R], getattr(module, function_name))  # ty: ignore[invalid-type-form]
+    return getattr(module, function_name)
 
 
 def compile(

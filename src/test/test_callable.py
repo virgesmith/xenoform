@@ -9,7 +9,7 @@ from xenoform import compile
 
 
 @compile()
-def round_sign() -> Callable[[float, bool], int]:  # type:ignore[empty-body]
+def round_sign() -> Callable[[float, bool], int]:  # ty: ignore[empty-body]
     """
     return [](double x, bool s) -> int { return int(s ? -x : x); };
     """
@@ -59,7 +59,7 @@ def use_modulo_py(f: Callable[[int], int], i: int) -> int:
 
 
 @compile()
-def use_round_sign(f: Callable[[float, bool], int], x: float) -> int:  # type:ignore[empty-body]
+def use_round_sign(f: Callable[[float, bool], int], x: float) -> int:  # ty: ignore[empty-body]
     """
     return f(x, true);
     """
@@ -86,9 +86,9 @@ def test_modulo() -> None:
     with pytest.raises(TypeError):
         f("x")  # ty: ignore[invalid-argument-type]
     with pytest.raises(TypeError):
-        f()  # ty: ignore[call-arg]
+        f()  # ty: ignore[missing-argument]
     with pytest.raises(TypeError):
-        f(2, 3)  # ty: ignore[call-arg]
+        f(2, 3)  # ty: ignore[too-many-positional-arguments]
 
     assert modulo(2)(2) == modulo_py(2)(2) == 0
     assert modulo(3)(3) == modulo_py(3)(3) == 0

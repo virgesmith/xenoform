@@ -7,21 +7,21 @@ from xenoform.logger import Logger
 compile_module = importlib.import_module("xenoform.compile")
 
 
-@compile_module.compile(verbose=True)  # ty: ignore[untyped-decorator]
+@compile_module.compile(verbose=True)
 def f() -> int:  # ty: ignore[empty-body]
     """
     return 42;
     """
 
 
-@compile_module.compile(verbose=True)  # ty: ignore[untyped-decorator]
+@compile_module.compile(verbose=True)
 def g() -> str:  # ty: ignore[empty-body]
     """
     return "hello";
     """
 
 
-def test_cacheing(monkeypatch) -> None:  # ty: ignore[no-untyped-def]
+def test_cacheing(monkeypatch) -> None:
     mock_logger = MagicMock(spec=Logger)
 
     # 2. Monkeypatch the specific logger instance in the 'processor' module

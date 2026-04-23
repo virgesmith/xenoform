@@ -29,11 +29,11 @@ def test_typing() -> None:
     assert "b" in sig.parameters and sig.parameters["b"].annotation is bool
 
 
-def untyped(x, y: Annotated[int, "blah"]):  # ty: ignore[no-untyped-def]
+def untyped(x, y: Annotated[int, "blah"]):
     pass
 
 
-def untyped_return(x: int, y: Annotated[int, "blah"]):  # ty: ignore[no-untyped-def]
+def untyped_return(x: int, y: Annotated[int, "blah"]):
     pass
 
 
