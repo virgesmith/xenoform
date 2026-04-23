@@ -74,7 +74,7 @@ def test_pytypetree_tuple_and_ellipsis() -> None:
 
 def test_pytypetree_raises_on_annotated() -> None:
     with pytest.raises(TypeError):
-        PyTypeTree(Annotated[int, "foo"])  # type: ignore[arg-type]
+        PyTypeTree(Annotated[int, "foo"])  # ty: ignore[invalid-argument-type]
 
 
 def test_specialised_types() -> None:
@@ -129,28 +129,28 @@ def test_parse_annotation() -> None:
     assert t is int
     assert q == {}
 
-    t, q = parse_annotation(Annotated[int, "const int&"])  # type: ignore[arg-type]
+    t, q = parse_annotation(Annotated[int, "const int&"])  # ty: ignore[invalid-argument-type]
     assert t is int
     assert q == {"override": "const int&"}
 
-    t, q = parse_annotation(Annotated[int, "uint32_t"])  # type: ignore[arg-type]
+    t, q = parse_annotation(Annotated[int, "uint32_t"])  # ty: ignore[invalid-argument-type]
     assert t is int
     assert q == {"override": "uint32_t"}
 
     with pytest.raises(TypeError):
-        parse_annotation(Annotated[int, 42])  # type: ignore[arg-type]
+        parse_annotation(Annotated[int, 42])  # ty: ignore[invalid-argument-type]
 
 
 def test_overridden_annotated_types() -> None:
-    cpptype = translate_type(Annotated[int, "uint32_t"])  # type: ignore[arg-type]
+    cpptype = translate_type(Annotated[int, "uint32_t"])  # ty: ignore[invalid-argument-type]
     assert str(cpptype) == "uint32_t"
 
-    cpptype = translate_type(Annotated[list[int], "py::list"])  # type: ignore[arg-type]
+    cpptype = translate_type(Annotated[list[int], "py::list"])  # ty: ignore[invalid-argument-type]
     assert str(cpptype) == "py::list"
 
 
 @compile(extra_includes=["<functional>"])
-def fibonacci(n: Annotated[int, "uint64_t"]) -> Annotated[int, "uint64_t"]:  # type: ignore[empty-body]
+def fibonacci(n: Annotated[int, "uint64_t"]) -> Annotated[int, "uint64_t"]:  # ty: ignore[empty-body]
     """
     // Since this function body is put into an anonymous lambda, it cannot be called recursively.
     // Workaround: put the recursive implementation into a named lambda that captures its scope and call this

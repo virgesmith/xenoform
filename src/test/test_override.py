@@ -4,7 +4,7 @@ from xenoform import compile
 
 
 @compile()
-def vector_sum_using_py(v: Annotated[list[int], "py::list"]) -> int:  # type: ignore[empty-body]
+def vector_sum_using_py(v: Annotated[list[int], "py::list"]) -> int:  # ty: ignore[empty-body]
     """
     int sum = 0;
     for (py::handle item: v) {
@@ -15,21 +15,21 @@ def vector_sum_using_py(v: Annotated[list[int], "py::list"]) -> int:  # type: ig
 
 
 @compile(extra_includes=["<numeric>", "<pybind11/stl.h>"])
-def vector_sum_using_cptrc(v: Annotated[list[int], "const std::vector<int>* const"]) -> int:  # type: ignore[empty-body]
+def vector_sum_using_cptrc(v: Annotated[list[int], "const std::vector<int>* const"]) -> int:  # ty: ignore[empty-body]
     """
     return std::accumulate(v->begin(), v->end(), 0);
     """
 
 
 @compile(extra_includes=["<numeric>", "<pybind11/stl.h>"])
-def vector_sum_using_cref(v: Annotated[list[int], "const std::vector<int>&"]) -> int:  # type: ignore[empty-body]
+def vector_sum_using_cref(v: Annotated[list[int], "const std::vector<int>&"]) -> int:  # ty: ignore[empty-body]
     """
     return std::accumulate(v.begin(), v.end(), 0);
     """
 
 
 @compile(extra_includes=["<numeric>", "<pybind11/stl.h>"])
-def vector_sum_using_rref(v: Annotated[list[int], "std::vector<int>&&"]) -> int:  # type: ignore[empty-body]
+def vector_sum_using_rref(v: Annotated[list[int], "std::vector<int>&&"]) -> int:  # ty: ignore[empty-body]
     """
     return std::accumulate(v.begin(), v.end(), 0);
     """
@@ -41,13 +41,13 @@ def test_overrides() -> None:
     assert vector_sum_using_py(list(range(5))) == 10
     # use a const pointer to const
     assert vector_sum_using_cptrc([1, 2, 3, 4]) == 10
-    assert vector_sum_using_cptrc(range(5)) == 10  # type: ignore[arg-type]
+    assert vector_sum_using_cptrc(range(5)) == 10  # ty: ignore[invalid-argument-type]
     # use a const reference
     assert vector_sum_using_cref([1, 2, 3, 4]) == 10
-    assert vector_sum_using_cref(range(5)) == 10  # type: ignore[arg-type]
+    assert vector_sum_using_cref(range(5)) == 10  # ty: ignore[invalid-argument-type]
     # use an rvalue reference
     assert vector_sum_using_rref([1, 2, 3, 4]) == 10
-    assert vector_sum_using_rref(range(5)) == 10  # type: ignore[arg-type]
+    assert vector_sum_using_rref(range(5)) == 10  # ty: ignore[invalid-argument-type]
 
 
 @compile()

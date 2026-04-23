@@ -6,7 +6,7 @@ from xenoform import compile
 
 
 @compile()
-def f_cpp(n: int, /, x: float, y: float = 2.7, *, b: bool = False) -> str:  # type: ignore[empty-body]
+def f_cpp(n: int, /, x: float, y: float = 2.7, *, b: bool = False) -> str:  # ty: ignore[empty-body]
     # arg optional positional keyword
     #   n    N         Y         N
     #   x    N         Y         Y
@@ -19,21 +19,21 @@ def f_cpp(n: int, /, x: float, y: float = 2.7, *, b: bool = False) -> str:  # ty
 
 def test_pos_kwargs() -> None:
     with pytest.raises(TypeError):
-        f_cpp(1)  # type: ignore[call-arg]
+        f_cpp(1)  # ty: ignore[call-arg]
     assert f_cpp(1, 3.1) == "n=1 x=3.100000 y=2.700000 b=0"
     assert f_cpp(1, 3.1, 3.1) == "n=1 x=3.100000 y=3.100000 b=0"
     assert f_cpp(1, x=3.1) == "n=1 x=3.100000 y=2.700000 b=0"
     assert f_cpp(1, x=3.1, y=3.1) == "n=1 x=3.100000 y=3.100000 b=0"
     with pytest.raises(TypeError):
-        f_cpp(n=1, x=3.1)  # type: ignore[call-arg]
+        f_cpp(n=1, x=3.1)  # ty: ignore[call-arg]
     assert f_cpp(1, 3.1, b=True) == "n=1 x=3.100000 y=2.700000 b=1"
     assert f_cpp(1, b=True, x=2.7) == "n=1 x=2.700000 y=2.700000 b=1"
     with pytest.raises(TypeError):
-        f_cpp(1, 3.1, 2.7, True)  # type: ignore[misc]
+        f_cpp(1, 3.1, 2.7, True)  # ty: ignore[misc]
 
 
 @compile()
-def varargs(*args: Any) -> int:  # type: ignore[empty-body]
+def varargs(*args: Any) -> int:  # ty: ignore[empty-body]
     """
     return args.size();
     """
@@ -44,11 +44,11 @@ def test_varargs() -> None:
     assert varargs(5) == 1
     assert varargs(5, 3) == 2
     with pytest.raises(TypeError):
-        varargs(x=5)  # type: ignore[call-arg]
+        varargs(x=5)  # ty: ignore[call-arg]
 
 
 @compile()
-def varkwargs(**args: Any) -> int:  # type: ignore[empty-body]
+def varkwargs(**args: Any) -> int:  # ty: ignore[empty-body]
     """
     return args.size();
     """
@@ -59,11 +59,11 @@ def test_varkwargs() -> None:
     assert varkwargs(x=1) == 1
     assert varkwargs(x=1, y=2) == 2
     with pytest.raises(TypeError):
-        varkwargs(5)  # type: ignore[call-arg]
+        varkwargs(5)  # ty: ignore[call-arg]
 
 
 @compile()
-def varposkwargs(n: int, *args: Any, m: int, **kwargs: Any) -> int:  # type: ignore[empty-body]
+def varposkwargs(n: int, *args: Any, m: int, **kwargs: Any) -> int:  # ty: ignore[empty-body]
     """
     return args.size() + 10 * kwargs.size() + 100 * n + 1000 * m;
     """
@@ -71,7 +71,7 @@ def varposkwargs(n: int, *args: Any, m: int, **kwargs: Any) -> int:  # type: ign
 
 def test_varposkwargs() -> None:
     with pytest.raises(TypeError):
-        assert varposkwargs(1, 1)  # type: ignore[call-arg]
+        assert varposkwargs(1, 1)  # ty: ignore[call-arg]
     assert varposkwargs(1, m=1) == 1100
     assert varposkwargs(n=1, m=1) == 1100
     assert varposkwargs(1, 1, m=1, y=2) == 1111

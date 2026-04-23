@@ -7,11 +7,11 @@ def test_cxx_std() -> None:
     with pytest.raises(ValueError):
 
         @compile(cxx_std=23)
-        def f(i: int) -> bool:  # type: ignore[empty-body]
+        def f(i: int) -> bool:  # ty: ignore[empty-body]
             "return i % 2;"
 
         @compile(cxx_std=20)
-        def g(i: int) -> bool:  # type: ignore[empty-body]
+        def g(i: int) -> bool:  # ty: ignore[empty-body]
             "return i % 3 == 0;"
 
         f(3)

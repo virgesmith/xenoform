@@ -13,7 +13,7 @@ implementation** in a docstr:
 import xenoform
 
 @xenoform.compile(vectorise=True)
-def max(i: int, j: int) -> int:  # type: ignore[empty-body]
+def max(i: int, j: int) -> int:  # ty: ignore[empty-body]
     "return i > j ? i : j;"
 ```
 
@@ -136,7 +136,7 @@ from typing import Annotated
 from xenoform import compile
 
 @compile(extra_headers=["<pybind11/numpy.h>"])
-def calc_balances_cpp(data: Annotated[pd.Series, "py::object"], rate: float) -> Annotated[pd.Series, "py::object"]:  # type: ignore[empty-body]
+def calc_balances_cpp(data: Annotated[pd.Series, "py::object"], rate: float) -> Annotated[pd.Series, "py::object"]:  # ty: ignore[empty-body]
     """
 ```
 ```cpp
@@ -202,7 +202,7 @@ In C++ this tradeoff does not exist. A reasonably well optimised C++ implementat
 from xenoform import compile
 
 @compile(extra_compile_args=["-fopenmp"], extra_link_args=["-fopenmp"])
-def calc_dist_matrix_cpp(points: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:  # type: ignore[empty-body]
+def calc_dist_matrix_cpp(points: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:  # ty: ignore[empty-body]
     """
 ```
 ```cpp
@@ -380,7 +380,7 @@ and lambdas. Annotate types using `Callable` e.g.
 
 ```py
 @compile()
-def modulo(n: int) -> Callable[[int], int]:  # type: ignore[empty-body]
+def modulo(n: int) -> Callable[[int], int]:  # ty: ignore[empty-body]
     """
     return [n](int i) { return i % n; };
     """

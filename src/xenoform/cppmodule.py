@@ -102,7 +102,7 @@ class ModuleSpec:
         self.extra_link_args += extra_link_args or []
         if self.cxx_std and self.cxx_std != cxx_std:
             raise ValueError(
-                "Requested C++ standard {} conflicts with previously set standard. Ensure only one standard per module"
+                f"Requested C++ standard {cxx_std} conflicts with previously set standard. Ensure only one standard per module"
             )
         self.cxx_std = cxx_std
         return self

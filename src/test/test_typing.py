@@ -8,7 +8,7 @@ from xenoform.errors import AnnotationError
 
 
 @compile()
-def f(i: int, x: float, *, b: bool) -> str:  # type: ignore[empty-body]
+def f(i: int, x: float, *, b: bool) -> str:  # ty: ignore[empty-body]
     """
     return "hello";
     """
@@ -29,11 +29,11 @@ def test_typing() -> None:
     assert "b" in sig.parameters and sig.parameters["b"].annotation is bool
 
 
-def untyped(x, y: Annotated[int, "blah"]):  # type: ignore[no-untyped-def]
+def untyped(x, y: Annotated[int, "blah"]):  # ty: ignore[no-untyped-def]
     pass
 
 
-def untyped_return(x: int, y: Annotated[int, "blah"]):  # type: ignore[no-untyped-def]
+def untyped_return(x: int, y: Annotated[int, "blah"]):  # ty: ignore[no-untyped-def]
     pass
 
 

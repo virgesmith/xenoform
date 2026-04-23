@@ -38,7 +38,7 @@ def test_numpy_byval() -> None:
 
 
 @compile()
-def specify_int_bits(a: npt.NDArray[np.int32]) -> np.int64:  # type: ignore[empty-body]
+def specify_int_bits(a: npt.NDArray[np.int32]) -> np.int64:  # ty: ignore[empty-body]
     """
     return a.ndim();
     """

@@ -17,12 +17,12 @@ def calc_balances_py(data: pd.Series, rate: float) -> pd.Series:
     current_value = 0.0
     for i, value in data.items():
         current_value = (current_value + value) * (1 - rate)
-        result_a[i] = current_value  # type: ignore[call-overload]
+        result_a[i] = current_value  # ty: ignore[call-overload]
     return result
 
 
 @compile(extra_includes=["<pybind11/numpy.h>"])
-def calc_balances_cpp(data: Annotated[pd.Series, "py::object"], rate: float) -> Annotated[pd.Series, "py::object"]:  # type: ignore[empty-body]
+def calc_balances_cpp(data: Annotated[pd.Series, "py::object"], rate: float) -> Annotated[pd.Series, "py::object"]:  # ty: ignore[empty-body]
     """
     // Import pandas
     auto pd = py::module::import("pandas");

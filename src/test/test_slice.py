@@ -8,7 +8,7 @@ from xenoform import compile
 
 
 @compile()
-def parse_slice(length: int, s: slice) -> list[int]:  # type: ignore[empty-body]
+def parse_slice(length: int, s: slice) -> list[int]:  # ty: ignore[empty-body]
     """
     py::ssize_t start = 0, stop = 0, step = 0, slice_length = 0;
     if (!s.compute(10, &start, &stop, &step, &slice_length)) {
@@ -24,7 +24,7 @@ def parse_slice(length: int, s: slice) -> list[int]:  # type: ignore[empty-body]
 
 
 @compile()
-def slice_shape(a: npt.NDArray[np.float64], *indices: int | slice | EllipsisType) -> list[int]:  # type: ignore[empty-body]
+def slice_shape(a: npt.NDArray[np.float64], *indices: int | slice | EllipsisType) -> list[int]:  # ty: ignore[empty-body]
     """
     py::array slice = a[indices];
     return std::vector<int>(slice.shape(), slice.shape() + slice.ndim());
@@ -32,7 +32,7 @@ def slice_shape(a: npt.NDArray[np.float64], *indices: int | slice | EllipsisType
 
 
 @compile()
-def explicit_ellipsis(a: int | slice | EllipsisType) -> str:  # type: ignore[empty-body]
+def explicit_ellipsis(a: int | slice | EllipsisType) -> str:  # ty: ignore[empty-body]
     """
     if (std::get_if<int>(&a)) {
         return "int";
@@ -63,7 +63,7 @@ def test_ellipsis() -> None:
     assert explicit_ellipsis(slice(1)) == "slice"
     assert explicit_ellipsis(...) == "ellipsis"
     with pytest.raises(TypeError):
-        explicit_ellipsis("abc")  # type: ignore[arg-type]
+        explicit_ellipsis("abc")  # ty: ignore[invalid-argument-type]
 
 
 if __name__ == "__main__":

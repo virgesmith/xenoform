@@ -2,7 +2,7 @@ from xenoform import ReturnValuePolicy, compile
 
 
 @compile(return_value_policy=ReturnValuePolicy.Reference, verbose=True)
-def rvp_function(a: int, b: int) -> float:  # type: ignore[empty-body]
+def rvp_function(a: int, b: int) -> float:  # ty: ignore[empty-body]
     """
     return a + b;
     """

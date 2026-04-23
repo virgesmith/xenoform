@@ -10,7 +10,7 @@ if platform.system() != "Linux":
 
 # function implementation is in a separate file
 @compile(extra_includes=['"test_external_source.cpp"'], extra_include_paths=["../../src/test"])
-def external_source(n: int) -> int:  # type: ignore[empty-body]
+def external_source(n: int) -> int:  # ty: ignore[empty-body]
     """
     return external_impl(n);
     """

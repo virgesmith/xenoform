@@ -15,7 +15,7 @@ class ClassB(Base):
         self.x = 2
 
     @compile()
-    def method(self: Self) -> int:  # type: ignore[empty-body]
+    def method(self: Self) -> int:  # ty: ignore[empty-body]
         """
         // extract instance variable
         return self.attr("x").cast<int>();
@@ -23,14 +23,14 @@ class ClassB(Base):
 
     @staticmethod
     @compile()
-    def static_method(i: int) -> int:  # type: ignore[empty-body]
+    def static_method(i: int) -> int:  # ty: ignore[empty-body]
         """
         return i + 1000;
         """
 
     @classmethod
     @compile()
-    def class_method(cls: type) -> str:  # type: ignore[empty-body]
+    def class_method(cls: type) -> str:  # ty: ignore[empty-body]
         """
         // extract X from cls arg
         auto val = cls.attr("X").cast<std::string>();
@@ -42,14 +42,14 @@ class ClassC(Base):
     X: str = "C"
 
     @compile()
-    def method(self: Self) -> int:  # type: ignore[empty-body]
+    def method(self: Self) -> int:  # ty: ignore[empty-body]
         """
         return 3;
         """
 
     @classmethod
     @compile()
-    def class_method(cls: type) -> str:  # type: ignore[empty-body]
+    def class_method(cls: type) -> str:  # ty: ignore[empty-body]
         """
         // extract X from cls arg
         auto val = cls.attr("X").cast<std::string>();
@@ -77,10 +77,10 @@ def test_method() -> None:
 
 def test_method_incorrect_usage() -> None:
     with pytest.raises(TypeError):
-        ClassA.method()  # type: ignore[call-arg]
+        ClassA.method()  # ty: ignore[call-arg]
     # C++ impl should raise same error type as python
     with pytest.raises(TypeError):
-        ClassB.method()  # type: ignore[call-arg]
+        ClassB.method()  # ty: ignore[call-arg]
 
 
 def test_class_method() -> None:
@@ -97,5 +97,5 @@ def test_class_method() -> None:
 def test_static_method() -> None:
     b = ClassB()
     with pytest.raises(AttributeError):
-        ClassA.static_method(6)  # type: ignore[attr-defined]
+        ClassA.static_method(6)  # ty: ignore[attr-defined]
     assert ClassB.static_method(6) == b.static_method(6) == 1006

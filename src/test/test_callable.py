@@ -21,14 +21,14 @@ def round_sign_py(x: float, s: bool) -> int:
 
 
 @compile()
-def modulo(n: int) -> Callable[[int], int]:  # type: ignore[empty-body]
+def modulo(n: int) -> Callable[[int], int]:  # ty: ignore[empty-body]
     """
     return [n](int i) { return i % n; };
     """
 
 
 @compile()
-def modulo_override(n: int) -> Annotated[Callable[[int], int], "py::cpp_function"]:  # type: ignore[empty-body]
+def modulo_override(n: int) -> Annotated[Callable[[int], int], "py::cpp_function"]:  # ty: ignore[empty-body]
     """
     // explicit construction of py::cpp_function is not necessary
     return py::cpp_function([n](int i) { return i % n; });
@@ -40,14 +40,14 @@ def modulo_py(n: int) -> Callable[[int], int]:
 
 
 @compile()
-def use_modulo(f: Callable[[int], int], i: int) -> int:  # type: ignore[empty-body]
+def use_modulo(f: Callable[[int], int], i: int) -> int:  # ty: ignore[empty-body]
     """
     return f(i);
     """
 
 
 @compile()
-def use_modulo_override(f: Annotated[Callable[[int], int], "py::function"], i: int) -> int:  # type: ignore[empty-body]
+def use_modulo_override(f: Annotated[Callable[[int], int], "py::function"], i: int) -> int:  # ty: ignore[empty-body]
     """
     // py::function returns a py::object so cast is required
     return f(i).cast<int>();
@@ -82,13 +82,13 @@ def test_modulo() -> None:
     assert g(10) == 3
 
     with pytest.raises(TypeError):
-        modulo("x")  # type: ignore[arg-type]
+        modulo("x")  # ty: ignore[invalid-argument-type]
     with pytest.raises(TypeError):
-        f("x")  # type: ignore[arg-type]
+        f("x")  # ty: ignore[invalid-argument-type]
     with pytest.raises(TypeError):
-        f()  # type: ignore[call-arg]
+        f()  # ty: ignore[call-arg]
     with pytest.raises(TypeError):
-        f(2, 3)  # type: ignore[call-arg]
+        f(2, 3)  # ty: ignore[call-arg]
 
     assert modulo(2)(2) == modulo_py(2)(2) == 0
     assert modulo(3)(3) == modulo_py(3)(3) == 0
@@ -131,22 +131,22 @@ def test_all_combinations() -> None:
 
 def test_function_type_errors() -> None:
     with pytest.raises(TypeError):
-        use_round_sign(modulo, 1.0)  # type: ignore[arg-type]
+        use_round_sign(modulo, 1.0)  # ty: ignore[invalid-argument-type]
     with pytest.raises(TypeError):
-        use_round_sign_py(modulo, 1.0)  # type: ignore[arg-type]
+        use_round_sign_py(modulo, 1.0)  # ty: ignore[invalid-argument-type]
     with pytest.raises(TypeError):
-        use_round_sign(modulo_py, 1.0)  # type: ignore[arg-type]
+        use_round_sign(modulo_py, 1.0)  # ty: ignore[invalid-argument-type]
     with pytest.raises(TypeError):
-        use_round_sign(modulo_override, 1.0)  # type: ignore[arg-type]
+        use_round_sign(modulo_override, 1.0)  # ty: ignore[invalid-argument-type]
 
     with pytest.raises(TypeError):
-        use_modulo(round_sign, 1)  # type: ignore[arg-type]
+        use_modulo(round_sign, 1)  # ty: ignore[invalid-argument-type]
     with pytest.raises(TypeError):
-        use_modulo_py(round_sign, 1)  # type: ignore[arg-type]
+        use_modulo_py(round_sign, 1)  # ty: ignore[invalid-argument-type]
     with pytest.raises(TypeError):
-        use_modulo(round_sign_py, 1)  # type: ignore[arg-type]
+        use_modulo(round_sign_py, 1)  # ty: ignore[invalid-argument-type]
     with pytest.raises(TypeError):
-        use_modulo_override(round_sign, 1)  # type: ignore[arg-type]
+        use_modulo_override(round_sign, 1)  # ty: ignore[invalid-argument-type]
 
 
 if __name__ == "__main__":
