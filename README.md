@@ -47,9 +47,7 @@ box may vary, e.g. on a mac, you may need to manually `brew install libomp` for 
 - Supports positional and keyword arguments with defaults, including positional-only and keyword-only markers (`/`,`*`)
 - Supports `*args` and `**kwargs`, mapped  (respectively) to `py::args` and `py::kwargs`. NB type annotations for these
 types are still useful for python type checkers.
-- Using annotated types, you can:
-    - override the default mapping of python types to C++ types
-    - where necessary, qualify C++ arguments by value, reference, or (dumb) pointer, with or without `const`
+- Using annotated types, you can override the default mapping of python types to C++ types
 - Automatically includes (minimal) required headers for compilation, according the function signatures in the module.
 If necessary, headers (and include paths) can be added manually.
 - Callable types are supported both as arguments and return values. See [below](#callable-types).
@@ -318,7 +316,7 @@ By default, only `np.array` is mapped to a type that supports in-place modificat
 or `set` map to the corresponding pybind11 type, e.g. `py::list` (see below). Note also `py::bytearray` has no mutable
 methods.
 
-### Custom Type Mappings and Qualifiers
+### Custom Type Mappings
 
 The mapping of types above is not exhaustive and there may be a number of reasons for requiring a new or different
 mapping. Some examples:
@@ -347,11 +345,13 @@ mapping. Some examples:
         """
     ```
 
-    Note that the argument is passed *by value* - like `np.array` it is shallow-copied, so no requirement for pointers or references. Consult the
-    [pybind11 documentation](https://pybind11.readthedocs.io/en/stable/reference.html) for more info.
+    Note that the argument is passed *by value* - like `np.array` it is shallow-copied, so no requirement for pointers
+    or references. Consult the [pybind11 documentation](https://pybind11.readthedocs.io/en/stable/reference.html)
+    for more info.
 
-- the type is a bound C++ object from a separate extension module. In-place modification may also be required. The type
-override must be provided, as well as a header file for the C++ definition:
+- the type is a bound C++ object from a separate extension module. In-place modification may also be required, which
+can be achieved by qualifying the override type as a mutable reference. A header file with the C++ definition must
+also be provided:
 
     ```py
     from other_ext import ExtObj
@@ -363,10 +363,10 @@ override must be provided, as well as a header file for the C++ definition:
         """
     ```
 
-    See test_extmodule.py for more examples.
+    See [test_extmodule.py](src/test/test_extmodule.py) for more examples.
 
 - an [opaque type](https://pybind11.readthedocs.io/en/stable/advanced/cast/stl.html#making-opaque-types) is required,
-e.g. for exposing STL containers directly to python. This must be registered in a separate module, and the C++ type must be known, but can be qualified as necessary. Here we modify it through a pointer:
+e.g. for exposing STL containers directly to python. This must be registered in a separate module, and the C++ type must be known, and can be qualified as necessary. Here we modify it through a pointer:
 
     ```py
     from other_ext import UIntVector
