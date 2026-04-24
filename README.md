@@ -17,18 +17,25 @@ def max(i: int, j: int) -> int:  # ty: ignore[empty-body]
     "return i > j ? i : j;"
 ```
 
-When Python loads this file, all functions using this decorator have their function signatures translated to C++ and
-the source for an extension module is generated. The first time any function is called, the module is built, and the
-attribute corresponding to the (empty) Python function is replaced with the C++ implementation in the extension module.
+Here's what happens automatically when you import a module with `@compile`-decorated functions:
 
-Subsequent calls to the function incur minimal overhead, as the attribute corresponding now points to the C++
-implementation.
+**First call or after code changes:**
 
-Each module stores a hash of the source code that built it. Modules are checked on load and automatically rebuilt when
-changes to any of the functions in the module (including decorator parameters) are detected.
+1. C++ source code is generated with the Python type signatures translated to C++
+2. The extension module is compiled
+3. The decorated Python functions are replaced with their compiled C++ implementations
 
-By default, the binaries, source code and build logs for the compiled modules can be found in the `ext` subfolder (this
-location can be changed).
+**Subsequent calls:**
+The C++ functions execute directly with minimal overhead.
+
+**Change detection:**
+Each module stores a hash of its source code and configuration. On import, xenoform checks these hashes and
+automatically rebuilds the module if any changes are detected.
+
+**Where files go:**
+By default, the `ext` subfolder contains binaries, generated source code, and build logs. To change this location see
+[below](#location-of-extension-modules).
+
 
 ## Features
 

@@ -74,7 +74,6 @@ def main() -> None:
 
         print(f"{n} | {py_time * 1000:.1f} | {cpp_time * 1000:.1f} | {100 * (py_time / cpp_time - 1.0):.0f}")
         assert py_result.equals(cpp_result)
-    print(f"pandas {pd.__version__}")
 
 
 if __name__ == "__main__":
