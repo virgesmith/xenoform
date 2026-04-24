@@ -5,15 +5,15 @@ from xenoform.extension_types import translate_type
 
 
 def test_translate_compound_types() -> None:
-    assert str(translate_type(int | float)) == "std::variant<int, double>"  # type: ignore[arg-type]
-    assert str(translate_type(int | None)) == "std::optional<int>"  # type: ignore[arg-type]
-    assert str(translate_type(Annotated[int | float, "double"])) == "double"  # type: ignore[arg-type]
-    assert str(translate_type(Annotated[int | None, "py::object"])) == "py::object"  # type: ignore[arg-type]
-    assert str(translate_type(int | float | None)) == "std::optional<std::variant<int, double>>"  # type: ignore[arg-type]
+    assert str(translate_type(int | float)) == "std::variant<int, double>"  # ty: ignore[invalid-argument-type]
+    assert str(translate_type(int | None)) == "std::optional<int>"  # ty: ignore[invalid-argument-type]
+    assert str(translate_type(Annotated[int | float, "double"])) == "double"  # ty: ignore[invalid-argument-type]
+    assert str(translate_type(Annotated[int | None, "py::object"])) == "py::object"  # ty: ignore[invalid-argument-type]
+    assert str(translate_type(int | float | None)) == "std::optional<std::variant<int, double>>"  # ty: ignore[invalid-argument-type]
 
 
 @compile()
-def union_type(x: Annotated[int | str, "const std::variant<int, std::string>&"]) -> str:  # type: ignore[empty-body]
+def union_type(x: Annotated[int | str, "const std::variant<int, std::string>&"]) -> str:  # ty: ignore[empty-body]
     """
     return std::holds_alternative<int>(x) ? std::to_string(std::get<int>(x)) : std::get<std::string>(x);
     """
@@ -25,7 +25,7 @@ def test_union_type() -> None:
 
 
 @compile()
-def optional_type(x: int | None) -> int:  # type: ignore[empty-body]
+def optional_type(x: int | None) -> int:  # ty: ignore[empty-body]
     """
     return x ? x.value() : 42;
     """
@@ -37,7 +37,7 @@ def test_optional_type() -> None:
 
 
 @compile()
-def compound_type(x: int | float | None) -> str:  # type: ignore[empty-body]
+def compound_type(x: int | float | None) -> str:  # ty: ignore[empty-body]
     """
     if (x) {
         if (std::holds_alternative<int>(x.value())) {

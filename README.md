@@ -13,22 +13,29 @@ implementation** in a docstr:
 import xenoform
 
 @xenoform.compile(vectorise=True)
-def max(i: int, j: int) -> int:  # type: ignore[empty-body]
+def max(i: int, j: int) -> int:  # ty: ignore[empty-body]
     "return i > j ? i : j;"
 ```
 
-When Python loads this file, all functions using this decorator have their function signatures are translated to C++
-and the source for an extension module is generated. The first time any function is called, the module is built, and
-the attribute corresponding to the (empty) Python function is replaced with the C++ implementation in the module.
+Here's what happens automatically when you import a module with `@compile`-decorated functions:
 
-Subsequent calls to the function incur minimal overhead, as the attribute corresponding to the (dummy) python function
-now points to the C++ implementation.
+**First call or after code changes:**
 
-Each module stores a hash of the source code that built it. Modules are checked on load and automatically rebuilt when
-changes to any of the functions in the module (including decorator parameters) are detected.
+1. C++ source code is generated with the Python type signatures translated to C++
+2. The extension module is compiled
+3. The decorated Python functions are replaced with their compiled C++ implementations
 
-By default, the binaries, source code and build logs for the compiled modules can be found in the `ext` subfolder (this
-location can be changed).
+**Subsequent calls:**
+The C++ functions execute directly with minimal overhead.
+
+**Change detection:**
+Each module stores a hash of its source code and configuration. On import, xenoform checks these hashes and
+automatically rebuilds the module if any changes are detected.
+
+**Where files go:**
+By default, the `ext` subfolder contains binaries, generated source code, and build logs. To change this location see
+[below](#location-of-extension-modules).
+
 
 ## Features
 
@@ -40,9 +47,7 @@ box may vary, e.g. on a mac, you may need to manually `brew install libomp` for 
 - Supports positional and keyword arguments with defaults, including positional-only and keyword-only markers (`/`,`*`)
 - Supports `*args` and `**kwargs`, mapped  (respectively) to `py::args` and `py::kwargs`. NB type annotations for these
 types are still useful for python type checkers.
-- Using annotated types, you can:
-    - override the default mapping of python types to C++ types
-    - where necessary, qualify C++ arguments by value, reference, or (dumb) pointer, with or without `const`
+- Using annotated types, you can override the default mapping of python types to C++ types
 - Automatically includes (minimal) required headers for compilation, according the function signatures in the module.
 If necessary, headers (and include paths) can be added manually.
 - Callable types are supported both as arguments and return values. See [below](#callable-types).
@@ -78,7 +83,7 @@ the inline code just call a function in a separate `.cpp` file.
 - Any changes to `#include`-d files won't automatically trigger a rebuild - to rebuild either modify the inline code or
 delete the ext module
 - Inline C++ code will break some pydocstyle linting rules, so these may need to be disabled. Likewise
-`type: ignore[empty-body]` may be required to silence mypy.
+`ignore[empty-body]` may be required to silence type checkers.
 
 ## Usage
 
@@ -136,7 +141,7 @@ from typing import Annotated
 from xenoform import compile
 
 @compile(extra_headers=["<pybind11/numpy.h>"])
-def calc_balances_cpp(data: Annotated[pd.Series, "py::object"], rate: float) -> Annotated[pd.Series, "py::object"]:  # type: ignore[empty-body]
+def calc_balances_cpp(data: Annotated[pd.Series, "py::object"], rate: float) -> Annotated[pd.Series, "py::object"]:  # ty: ignore[empty-body]
     """
 ```
 ```cpp
@@ -202,7 +207,7 @@ In C++ this tradeoff does not exist. A reasonably well optimised C++ implementat
 from xenoform import compile
 
 @compile(extra_compile_args=["-fopenmp"], extra_link_args=["-fopenmp"])
-def calc_dist_matrix_cpp(points: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:  # type: ignore[empty-body]
+def calc_dist_matrix_cpp(points: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:  # ty: ignore[empty-body]
     """
 ```
 ```cpp
@@ -311,7 +316,7 @@ By default, only `np.array` is mapped to a type that supports in-place modificat
 or `set` map to the corresponding pybind11 type, e.g. `py::list` (see below). Note also `py::bytearray` has no mutable
 methods.
 
-### Custom Type Mappings and Qualifiers
+### Custom Type Mappings
 
 The mapping of types above is not exhaustive and there may be a number of reasons for requiring a new or different
 mapping. Some examples:
@@ -340,11 +345,13 @@ mapping. Some examples:
         """
     ```
 
-    Note that the argument is passed *by value* - like `np.array` it is shallow-copied, so no requirement for pointers or references. Consult the
-    [pybind11 documentation](https://pybind11.readthedocs.io/en/stable/reference.html) for more info.
+    Note that the argument is passed *by value* - like `np.array` it is shallow-copied, so no requirement for pointers
+    or references. Consult the [pybind11 documentation](https://pybind11.readthedocs.io/en/stable/reference.html)
+    for more info.
 
-- the type is a bound C++ object from a separate extension module. In-place modification may also be required. The type
-override must be provided, as well as a header file for the C++ definition:
+- the type is a bound C++ object from a separate extension module. In-place modification may also be required, which
+can be achieved by qualifying the override type as a mutable reference. A header file with the C++ definition must
+also be provided:
 
     ```py
     from other_ext import ExtObj
@@ -356,10 +363,10 @@ override must be provided, as well as a header file for the C++ definition:
         """
     ```
 
-    See test_extmodule.py for more examples.
+    See [test_extmodule.py](src/test/test_extmodule.py) for more examples.
 
 - an [opaque type](https://pybind11.readthedocs.io/en/stable/advanced/cast/stl.html#making-opaque-types) is required,
-e.g. for exposing STL containers directly to python. This must be registered in a separate module, and the C++ type must be known, but can be qualified as necessary. Here we modify it through a pointer:
+e.g. for exposing STL containers directly to python. This must be registered in a separate module, and the C++ type must be known, and can be qualified as necessary. Here we modify it through a pointer:
 
     ```py
     from other_ext import UIntVector
@@ -380,7 +387,7 @@ and lambdas. Annotate types using `Callable` e.g.
 
 ```py
 @compile()
-def modulo(n: int) -> Callable[[int], int]:  # type: ignore[empty-body]
+def modulo(n: int) -> Callable[[int], int]:  # ty: ignore[empty-body]
     """
     return [n](int i) { return i % n; };
     """

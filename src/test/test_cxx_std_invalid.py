@@ -10,7 +10,7 @@ def test_cxx_std_invalid() -> None:
     with pytest.raises(CompilationError):
 
         @compile(cxx_std=24)
-        def f(i: int) -> bool:  # type: ignore[empty-body]
+        def f(i: int) -> bool:  # ty: ignore[empty-body]
             "return i % 2;"
 
         f(3)

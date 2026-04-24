@@ -17,7 +17,7 @@ if platform.system() != "Linux":
     extra_include_paths=["../../src/test"],
     extra_link_args=["-L../../src/test", "-lshared", "-Wl,-rpath=src/test"],
 )
-def lucas(n: Annotated[int, "uint64_t"]) -> Annotated[int, "uint64_t"]:  # type: ignore[empty-body]
+def lucas(n: Annotated[int, "uint64_t"]) -> Annotated[int, "uint64_t"]:  # ty: ignore[empty-body]
     """
     return lucas(n);
     """

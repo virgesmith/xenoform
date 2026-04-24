@@ -13,15 +13,16 @@ def calc_balances_py(data: pd.Series, rate: float) -> pd.Series:
     """Cannot vectorise, since each value is dependent on the previous value"""
     result = pd.Series(index=data.index)
     result_a = result.to_numpy()
+    result_a.flags.writeable = True  # required in pandas 3+
     current_value = 0.0
     for i, value in data.items():
         current_value = (current_value + value) * (1 - rate)
-        result_a[i] = current_value  # type: ignore[call-overload]
+        result_a[i] = current_value
     return result
 
 
 @compile(extra_includes=["<pybind11/numpy.h>"])
-def calc_balances_cpp(data: Annotated[pd.Series, "py::object"], rate: float) -> Annotated[pd.Series, "py::object"]:  # type: ignore[empty-body]
+def calc_balances_cpp(data: Annotated[pd.Series, "py::object"], rate: float) -> Annotated[pd.Series, "py::object"]:  # ty: ignore[empty-body]
     """
     // Import pandas
     auto pd = py::module::import("pandas");
@@ -30,7 +31,12 @@ def calc_balances_cpp(data: Annotated[pd.Series, "py::object"], rate: float) -> 
 
     // Access the values via numpy/py::array_t
     auto data_a = data.attr("to_numpy")().cast<py::array_t<int64_t>>();
-    auto result_a = result.attr("to_numpy")().cast<py::array_t<double>>();
+
+    // for pandas >= 3 we need to explicitly make the underlying numpy array writeable via the python API.
+    // (the pybind11 API doesn't appear to support modification of flags)
+    auto result_np = result.attr("to_numpy")();
+    result_np.attr("flags").attr("writeable") = true;
+    auto result_a = result_np.cast<py::array_t<double>>();
 
     auto n = data_a.request().shape[0];
     auto d = data_a.unchecked<1>();

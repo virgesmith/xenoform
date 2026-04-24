@@ -1,5 +1,5 @@
 # dummy generic types for references and pointers
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from copy import copy
 from types import EllipsisType, NoneType, UnionType
 from typing import Annotated, Any, Self, get_args, get_origin
@@ -36,6 +36,7 @@ DEFAULT_TYPE_MAPPING = {
     UnionType: "std::variant",
     Callable: "std::function",
     EllipsisType: "py::ellipsis",
+    Iterable: "py::iterable",
 }
 
 HEADER_REQUIREMENTS = {
@@ -82,7 +83,7 @@ class CppTypeTree:
     """Mapped tree structure for C++ types"""
 
     def __init__(self, tree: PyTypeTree, *, override: str | None = None) -> None:
-        self.type = DEFAULT_TYPE_MAPPING.get(tree.type)  # type: ignore[arg-type]
+        self.type = DEFAULT_TYPE_MAPPING.get(tree.type)  # ty: ignore[invalid-argument-type]
         if not self.type and not override:
             raise CppTypeError(f"Don't know a C++ type for '{tree.type}' and no override provided")
         self.override = override

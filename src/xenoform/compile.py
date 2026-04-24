@@ -148,14 +148,14 @@ def _check_annotations[**P, R](func: Callable[P, R]) -> None:
         missing_annotations += ", (return)"
 
     if missing_annotations:
-        raise AnnotationError(f"Function {func.__name__} has missing annotations: {missing_annotations}")
+        raise AnnotationError(f"Function {func.__name__} has missing annotations: {missing_annotations}")  # ty: ignore[unresolved-attribute]
 
 
 @lru_cache  # limited function cache
 def _get_function(module_name: str, function_name: str) -> Callable[P, R]:
     module = _get_module(module_name)
     logger(f"redirected {module_name}.{function_name[1:]} to compiled function {module.__name__}.{function_name}")
-    return cast(Callable[P, R], getattr(module, function_name))
+    return getattr(module, function_name)
 
 
 def compile(
@@ -204,7 +204,7 @@ def compile(
         module_name = f"{Path(inspect.getfile(func)).stem}"
         function_body = sig + " {" + (func.__doc__ or "") + "}"
 
-        logger(f"registering {module_name}_ext.{module_name}.{func.__name__} (in {extmodule_root})")
+        logger(f"registering {module_name}_ext.{module_name}.{func.__name__} (in {extmodule_root})")  # ty: ignore[unresolved-attribute]
 
         if vectorise:
             function_body = f"py::vectorize({function_body})"
@@ -224,7 +224,7 @@ def compile(
 
         # ...as well as adding the help to the ext module
         function_spec = FunctionSpec(
-            name=func.__name__,
+            name=func.__name__,  # ty: ignore[unresolved-attribute]
             body=function_body,
             arg_annotations=arg_defs,
             scope=scope,

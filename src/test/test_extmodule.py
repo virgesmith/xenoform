@@ -1,12 +1,12 @@
 from typing import Annotated
 
-import xenoform_test_ext
+import xenoform_test_ext  # ty:ignore[unresolved-import]
 
 from xenoform import compile
 
 
 @compile(extra_include_paths=["../../src/test/xenoform-test-ext/include"], extra_includes=['"module.h"'])
-def make_object(n: int) -> Annotated[xenoform_test_ext.ExtClass, "ext_ns::ExtClass"]:  # type: ignore[empty-body]
+def make_object(n: int) -> Annotated[xenoform_test_ext.ExtClass, "ext_ns::ExtClass"]:
     """
     return  ext_ns::ExtClass(n);
     """
@@ -42,21 +42,21 @@ def mutate_vector_ptr(vec: Annotated[xenoform_test_ext.vec_uint64_t, "std::vecto
 
 def test_ext_vector() -> None:
     vec = xenoform_test_ext.vec_uint64_t(range(10))
-    assert all(v == i for i, v in enumerate(vec))  # type: ignore[arg-type, var-annotated]
+    assert all(v == i for i, v in enumerate(vec))
 
     # function in other module works as expected
     xenoform_test_ext.mutate(vec)  # increments each element
-    assert all(v == i for i, v in enumerate(vec, start=1))  # type: ignore[arg-type, var-annotated]
+    assert all(v == i for i, v in enumerate(vec, start=1))
 
     # can mutate by ref
     mutate_vector_ref(vec, 2)
-    assert all(v == i for i, v in enumerate(vec, start=3))  # type: ignore[arg-type, var-annotated]
+    assert all(v == i for i, v in enumerate(vec, start=3))
     # can mutate by ptr
     mutate_vector_ptr(vec, 3)
-    assert all(v == i for i, v in enumerate(vec, start=6))  # type: ignore[arg-type, var-annotated]
+    assert all(v == i for i, v in enumerate(vec, start=6))
     # can't mutate by val
     mutate_vector_val(vec, 4)
-    assert all(v == i for i, v in enumerate(vec, start=6))  # type: ignore[arg-type, var-annotated]
+    assert all(v == i for i, v in enumerate(vec, start=6))
 
 
 def test_ext_object() -> None:

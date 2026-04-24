@@ -8,7 +8,7 @@ from xenoform.errors import AnnotationError
 
 
 @compile()
-def f(i: int, x: float, *, b: bool) -> str:  # type: ignore[empty-body]
+def f(i: int, x: float, *, b: bool) -> str:  # ty: ignore[empty-body]
     """
     return "hello";
     """
@@ -17,7 +17,7 @@ def f(i: int, x: float, *, b: bool) -> str:  # type: ignore[empty-body]
 def test_typing() -> None:
     # check the compile machinery doesn't lose any type information
     def wrap_f(i: Annotated[int, "size_t"], x: float, *, b: bool) -> str:
-        # the real test here is the linters (mypy ruff etc) not pytest. there should be no errors about the types
+        # the real test here is the linters (ty ruff etc) not pytest. there should be no errors about the types
         # differing between wrap_f and f
         return f(i, x, b=b)
 
@@ -29,11 +29,11 @@ def test_typing() -> None:
     assert "b" in sig.parameters and sig.parameters["b"].annotation is bool
 
 
-def untyped(x, y: Annotated[int, "blah"]):  # type: ignore[no-untyped-def]
+def untyped(x, y: Annotated[int, "blah"]):
     pass
 
 
-def untyped_return(x: int, y: Annotated[int, "blah"]):  # type: ignore[no-untyped-def]
+def untyped_return(x: int, y: Annotated[int, "blah"]):
     pass
 
 

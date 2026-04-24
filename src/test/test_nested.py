@@ -6,7 +6,7 @@ from xenoform.utils import get_function_scope
 
 def outer(x: float) -> float:
     @compile()
-    def inner(x: float, i: int) -> float:  # type: ignore[empty-body]
+    def inner(x: float, i: int) -> float:  # ty: ignore[empty-body]
         """
         return x * i;
         """
@@ -17,7 +17,7 @@ def outer(x: float) -> float:
 def test_nested() -> None:
     assert outer(3.1) == 15.5
 
-    from test_nested_ext.test_nested import _outer_inner  # type: ignore[import-not-found]
+    from test_nested_ext.test_nested import _outer_inner  # ty: ignore[unresolved-import]
 
     assert _outer_inner(2.7, 3) == pytest.approx(8.1)
 

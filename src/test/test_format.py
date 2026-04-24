@@ -1,6 +1,6 @@
 import subprocess
 
-import clang_format  # type: ignore[import-untyped]
+import clang_format
 
 
 def test_format() -> None:

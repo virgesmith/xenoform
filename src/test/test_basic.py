@@ -16,7 +16,7 @@ def test_signature_translation1() -> None:
 
     assert translate_function_signature(f) == ("[](int _i) -> void", ['py::arg("_i")'], [])
 
-    def f2(a: float, b: str, c: bool) -> int:  # type: ignore[empty-body]
+    def f2(a: float, b: str, c: bool) -> int:  # ty: ignore[empty-body]
         ""
 
     assert translate_function_signature(f2) == (
@@ -25,7 +25,7 @@ def test_signature_translation1() -> None:
         ["<string>"],
     )
 
-    def f3(a: float, b: Annotated[str, "const std::string&"], c: bool) -> int:  # type: ignore[empty-body]
+    def f3(a: float, b: Annotated[str, "const std::string&"], c: bool) -> int:  # ty: ignore[empty-body]
         ""
 
     assert translate_function_signature(f3) == (
@@ -34,7 +34,7 @@ def test_signature_translation1() -> None:
         [],  # override means <string> must be manually added
     )
 
-    def f4(a: float, b: Annotated[str, "const char*"], c: bool) -> int:  # type: ignore[empty-body]
+    def f4(a: float, b: Annotated[str, "const char*"], c: bool) -> int:  # ty: ignore[empty-body]
         ""
 
     assert translate_function_signature(f4) == (
@@ -43,7 +43,7 @@ def test_signature_translation1() -> None:
         [],
     )
 
-    def f5(a: float, *, b: Annotated[str, "const char*"], c: bool, **kwargs: Any) -> int:  # type: ignore[empty-body]
+    def f5(a: float, *, b: Annotated[str, "const char*"], c: bool, **kwargs: Any) -> int:  # ty: ignore[empty-body]
         ""
 
     assert translate_function_signature(f5) == (
@@ -99,7 +99,7 @@ def test_signature_translation2() -> None:
         [],
     )
 
-    def f10(a: tuple[int, tuple[int, float]], *, value: Callable[[int, float], bool]) -> bool:  # type: ignore[empty-body]
+    def f10(a: tuple[int, tuple[int, float]], *, value: Callable[[int, float], bool]) -> bool:  # ty: ignore[empty-body]
         ""
 
     assert translate_function_signature(f10) == (
@@ -131,7 +131,7 @@ def test_parse_macros() -> None:
 
 
 @compile()
-def max(i: int, j: int) -> int:  # type: ignore[empty-body]
+def max(i: int, j: int) -> int:  # ty: ignore[empty-body]
     # comments can be added before...
     "return i > j ? i : j;"
     # ...and after the docstr
@@ -155,7 +155,7 @@ def test_ref() -> None:
 
 
 @compile()
-def string(s: str) -> int:  # type: ignore[empty-body]
+def string(s: str) -> int:  # ty: ignore[empty-body]
     """
     return static_cast<int>(s.size());
     """
@@ -166,7 +166,7 @@ def test_header_required() -> None:
 
 
 @compile(extra_includes=["<pybind11/stl.h>"], define_macros=["PYBIND11_DETAILED_ERROR_MESSAGES"])
-def vec(size: int) -> list[int]:  # type: ignore[empty-body]
+def vec(size: int) -> list[int]:  # ty: ignore[empty-body]
     """
     return std::vector<int>(size);
     """
@@ -177,7 +177,7 @@ def test_stl() -> None:
 
 
 @compile()
-def throws() -> bool:  # type: ignore[empty-body]
+def throws() -> bool:  # ty: ignore[empty-body]
     """
     throw std::runtime_error("oops");
     """
@@ -194,7 +194,7 @@ def test_unknown_type() -> None:
         class X: ...
 
         @compile()
-        def unknown(x: X) -> bool:  # type: ignore[empty-body]
+        def unknown(x: X) -> bool:  # ty: ignore[empty-body]
             "return false;"
 
 
