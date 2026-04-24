@@ -17,7 +17,7 @@ def f(i: int, x: float, *, b: bool) -> str:  # ty: ignore[empty-body]
 def test_typing() -> None:
     # check the compile machinery doesn't lose any type information
     def wrap_f(i: Annotated[int, "size_t"], x: float, *, b: bool) -> str:
-        # the real test here is the linters (mypy ruff etc) not pytest. there should be no errors about the types
+        # the real test here is the linters (ty ruff etc) not pytest. there should be no errors about the types
         # differing between wrap_f and f
         return f(i, x, b=b)
 

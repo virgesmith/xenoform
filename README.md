@@ -83,7 +83,7 @@ the inline code just call a function in a separate `.cpp` file.
 - Any changes to `#include`-d files won't automatically trigger a rebuild - to rebuild either modify the inline code or
 delete the ext module
 - Inline C++ code will break some pydocstyle linting rules, so these may need to be disabled. Likewise
-`type: ignore[empty-body]` may be required to silence mypy.
+`ignore[empty-body]` may be required to silence type checkers.
 
 ## Usage
 
