@@ -8,7 +8,7 @@ using namespace ext_ns;
 
 PYBIND11_MAKE_OPAQUE(std::vector<uint64_t>)
 
-PYBIND11_MODULE(_xenoform_test_ext, m) {
+PYBIND11_MODULE(_xenoform_test_ext, m, py::mod_gil_not_used()) {
 
   py::class_<ExtClass>(m, "ExtClass").def(py::init<int>()).def("get", &ExtClass::get).def("set", &ExtClass::set);
 

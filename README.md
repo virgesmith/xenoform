@@ -145,16 +145,25 @@ def calc_balances_cpp(data: Annotated[pd.Series, "py::object"], rate: float) -> 
     """
 ```
 ```cpp
+    // Import pandas
     auto pd = py::module::import("pandas");
+    // Construct an empty pd.Series with the same index as the input
     auto result = pd.attr("Series")(py::arg("index") = data.attr("index"));
 
+    // Access the values via numpy/py::array_t
     auto data_a = data.attr("to_numpy")().cast<py::array_t<int64_t>>();
-    auto result_a = result.attr("to_numpy")().cast<py::array_t<double>>();
+
+    // for pandas >= 3 we need to explicitly make the underlying numpy array writeable via the python API.
+    // (the pybind11 API doesn't appear to support modification of flags)
+    auto result_np = result.attr("to_numpy")();
+    result_np.attr("flags").attr("writeable") = true;
+    auto result_a = result_np.cast<py::array_t<double>>();
 
     auto n = data_a.request().shape[0];
     auto d = data_a.unchecked<1>();
     auto r = result_a.mutable_unchecked<1>();
 
+    // Do the calculation
     double current_value = 0.0;
     for (py::ssize_t i = 0; i < n; ++i) {
         current_value = (current_value + d(i)) * (1.0 - rate);
