@@ -111,8 +111,8 @@ def group_headers(headers: list[str]) -> list[list[str]]:
     3. <thirdparty.hpp> // third-party library code
     4. <stdlib> // C and C++ standard library headers
     """
-    local_pattern = re.compile(r'^".*\.h|hpp"$')
-    thirdparty_pattern = re.compile(r"^<.*\.h|hpp>$")
+    local_pattern = re.compile(r'^".*\.(h|hpp)"$')
+    thirdparty_pattern = re.compile(r"^<.*\.(h|hpp)>$")
     stdlib_pattern = re.compile(r"^<[^.]+>$")
 
     stripped = Itr(headers).map(str.strip)
@@ -135,7 +135,7 @@ def group_headers(headers: list[str]) -> list[list[str]]:
 
 def build_freethreaded() -> bool:
     """Return whether interpreter is free-threaded AND free-threading hasn't been manually overridden"""
-    if sys.version_info[1] < 13:
+    if not hasattr(sys, "_is_gil_enabled"):
         return False
     return not (sys._is_gil_enabled() or get_config().disable_ft is not None)
 
@@ -144,8 +144,8 @@ def format_cpp(code: str) -> str:
     """Use clang-format to prettify code"""
     cmd = [clang_format.get_executable("clang-format"), f"--style={get_config().cpp_format}"]
     try:
-        result = subprocess.run(cmd, input=code, capture_output=True, text=True, check=True)
-    except subprocess.CalledProcessError as e:
+        result = subprocess.run(cmd, input=code, capture_output=True, text=True, check=True, timeout=30)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
         print(f"clang-format failed: {e}. module.cpp will be unformatted")
     else:
         code = result.stdout

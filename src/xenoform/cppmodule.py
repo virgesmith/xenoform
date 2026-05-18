@@ -135,7 +135,7 @@ class ModuleSpec:
             # do we need to deduplicate? or will this break something?
             define_macros=" ".join(self.define_macros),
             extra_compile_args=" ".join(deduplicate(self.extra_compile_args)),
-            extra_link_args=" ".join(self.extra_link_args),
+            extra_link_args=" ".join(deduplicate(self.extra_link_args)),
             module_name=module_name,
             freethreaded=disable_gil_flag,
             function_definitions=function_defs,

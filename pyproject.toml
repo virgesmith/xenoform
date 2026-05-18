@@ -1,6 +1,6 @@
 [project]
 name = "xenoform"
-version = "0.1.8"
+version = "0.1.9"
 description = "Inlined C++ functions"
 readme = "README.md"
 authors = [
@@ -42,11 +42,10 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "pre-commit>=4.6.0",
-    "pytest>=8.4.1",
-    "pytest-cov>=6.2.1",
-    "ruff>=0.12.5",
-    "ty>=0.0.32",
-    "types-toml>=0.10.8.20240310",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.15.13",
+    "ty>=0.0.37",
     "xenoform-test-ext",
 ]
 

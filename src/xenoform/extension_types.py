@@ -137,7 +137,8 @@ def parse_annotation(origin: type) -> tuple[type, dict[str, str]]:
         raise CppTypeError("Python types with no default mapping must be annotated with a type override")
     if t is Annotated:
         base, *extras = get_args(origin)
-        assert len(extras) == 1, "one and only one annotation must be specified"
+        if len(extras) != 1:
+            raise CppTypeError("one and only one annotation must be specified")
         if isinstance(extras[0], str):
             return base, {"override": extras[0]}
         raise TypeError(f"Unexpected extra for {base}: {extras[0]}({type(extras[0])})")

@@ -36,12 +36,16 @@ _module_registry: dict[str, ModuleSpec] = defaultdict(ModuleSpec)
 # otherwise if a rebuild is done, the module is already loaded and the changes are not picked up
 # importlib.reload doesn't work here, the old module remains in memory
 def _get_module_checksum(module_name: str) -> str | None:
-    p = subprocess.run(
-        ["python", "-c", f"import {module_name} as m; print(m.__checksum__)"],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        p = subprocess.run(
+            [sys.executable, "-c", f"import {module_name} as m; print(m.__checksum__)"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired:  # pragma: no cover
+        return None
     if p.returncode == 0:
         return p.stdout.strip()
     return None
