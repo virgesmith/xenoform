@@ -145,9 +145,7 @@ def format_cpp(code: str) -> str:
     cmd = [clang_format.get_executable("clang-format"), f"--style={get_config().cpp_format}"]
     try:
         result = subprocess.run(cmd, input=code, capture_output=True, text=True, check=True, timeout=30)
-    except subprocess.TimeoutExpired:  # pragma: no cover
-        print("clang-format timed out. module.cpp will be unformatted")
-    except subprocess.CalledProcessError as e:
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
         print(f"clang-format failed: {e}. module.cpp will be unformatted")
     else:
         code = result.stdout
