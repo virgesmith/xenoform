@@ -111,8 +111,8 @@ def group_headers(headers: list[str]) -> list[list[str]]:
     3. <thirdparty.hpp> // third-party library code
     4. <stdlib> // C and C++ standard library headers
     """
-    local_pattern = re.compile(r'^".*\.h|hpp"$')
-    thirdparty_pattern = re.compile(r"^<.*\.h|hpp>$")
+    local_pattern = re.compile(r'^".*\.(h|hpp)"$')
+    thirdparty_pattern = re.compile(r"^<.*\.(h|hpp)>$")
     stdlib_pattern = re.compile(r"^<[^.]+>$")
 
     stripped = Itr(headers).map(str.strip)
@@ -135,7 +135,7 @@ def group_headers(headers: list[str]) -> list[list[str]]:
 
 def build_freethreaded() -> bool:
     """Return whether interpreter is free-threaded AND free-threading hasn't been manually overridden"""
-    if sys.version_info[1] < 13:
+    if not hasattr(sys, "_is_gil_enabled"):
         return False
     return not (sys._is_gil_enabled() or get_config().disable_ft is not None)
 

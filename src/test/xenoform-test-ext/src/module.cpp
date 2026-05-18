@@ -8,8 +8,12 @@ using namespace ext_ns;
 
 PYBIND11_MAKE_OPAQUE(std::vector<uint64_t>)
 
-PYBIND11_MODULE(_xenoform_test_ext, m, py::mod_gil_not_used()) {
 
+#ifdef Py_GIL_DISABLED
+PYBIND11_MODULE(_xenoform_test_ext, m, py::mod_gil_not_used()) {
+#else
+PYBIND11_MODULE(_xenoform_test_ext, m) {
+#endif
   py::class_<ExtClass>(m, "ExtClass").def(py::init<int>()).def("get", &ExtClass::get).def("set", &ExtClass::set);
 
   py::bind_vector<std::vector<uint64_t>>(m, "vec_uint64_t");

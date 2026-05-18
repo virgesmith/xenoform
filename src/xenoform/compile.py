@@ -37,7 +37,7 @@ _module_registry: dict[str, ModuleSpec] = defaultdict(ModuleSpec)
 # importlib.reload doesn't work here, the old module remains in memory
 def _get_module_checksum(module_name: str) -> str | None:
     p = subprocess.run(
-        ["python", "-c", f"import {module_name} as m; print(m.__checksum__)"],
+        [sys.executable, "-c", f"import {module_name} as m; print(m.__checksum__)"],
         check=False,
         capture_output=True,
         text=True,
