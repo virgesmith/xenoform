@@ -20,3 +20,5 @@ ext/
 *.so
 
 .clang-format
+
+.claude/
