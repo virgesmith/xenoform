@@ -79,6 +79,42 @@ def test_varposkwargs() -> None:
     assert varposkwargs(1, 1, m=1) == 1101
 
 
+@compile()
+def str_default(s: str = 'a"b\\c\nd') -> str:  # ty: ignore[empty-body]
+    """
+    return s;
+    """
+
+
+def test_str_default() -> None:
+    assert str_default() == 'a"b\\c\nd'
+    assert str_default("explicit") == "explicit"
+
+
+@compile()
+def optional_default(n: int | None = None) -> int:  # ty: ignore[empty-body]
+    """
+    return n.has_value() ? *n : -1;
+    """
+
+
+def test_optional_default() -> None:
+    assert optional_default() == -1
+    assert optional_default(5) == 5
+
+
+@compile()
+def empty_container_default(v: list[int] = []) -> int:  # noqa: B006 # ty: ignore[empty-body]
+    """
+    return (int)v.size();
+    """
+
+
+def test_empty_container_default() -> None:
+    assert empty_container_default() == 0
+    assert empty_container_default([1, 2, 3]) == 3
+
+
 if __name__ == "__main__":
     # test_pos_kwargs()
     test_varargs()
