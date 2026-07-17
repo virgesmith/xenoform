@@ -25,9 +25,48 @@ def platform_specific(settings: dict[Platform, list[str]]) -> list[str] | None:
     return settings.get(cast(Platform, platform.system()))
 
 
-def _translate_value(value: Any) -> str:
-    translations = {"False": "false", "True": "true"}
-    return translations.get(str(value), str(value))
+_CPP_STRING_ESCAPES = {"\\": "\\\\", '"': '\\"', "\n": "\\n", "\r": "\\r", "\t": "\\t"}
+
+
+def _cpp_string_literal(value: str) -> str:
+    """Render a Python str as an escaped C++ string literal."""
+    chars = []
+    for ch in value:
+        if ch in _CPP_STRING_ESCAPES:
+            chars.append(_CPP_STRING_ESCAPES[ch])
+        elif ch.isascii() and ch.isprintable():
+            chars.append(ch)
+        else:
+            chars.extend(f"\\{byte:03o}" for byte in ch.encode("utf-8"))
+    return '"' + "".join(chars) + '"'
+
+
+def _translate_value(value: Any, cpptype: str) -> str:
+    """Translate a Python default argument value to its C++ literal representation.
+
+    Translation is by type, not by stringified value: bools become ``true``/``false``,
+    ``None`` becomes ``std::nullopt``, strings are quoted and escaped, and empty
+    containers become a value-initialised instance of their C++ type. Values that
+    cannot be represented unambiguously in C++ raise ``TypeError`` at decoration time
+    rather than deferring an invalid-C++ compile error to first call.
+    """
+    # bool is a subclass of int, so it must be checked first
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return "std::nullopt"
+    if isinstance(value, str):
+        return _cpp_string_literal(value)
+    if isinstance(value, (int, float)):
+        return repr(value)
+    if isinstance(value, (tuple, list, set, dict)):
+        if not value:
+            return f"{cpptype}{{}}"
+        raise TypeError(
+            f"cannot translate non-empty container default {value!r} to C++; "
+            "implement the default in the C++ code instead"
+        )
+    raise TypeError(f"cannot translate default value {value!r} of type {type(value).__name__} to C++")
 
 
 def _splitargs(signature: str) -> tuple[str, ...]:
@@ -76,8 +115,9 @@ def translate_function_signature(func: Callable[..., Any]) -> tuple[str, list[st
                 arg_def = f"{cpptype} {var_name}"
             arg_annotation = f'py::arg("{var_name}")'
             if var_name in defaults:
-                arg_def += f"={_translate_value(defaults[var_name])}"
-                arg_annotation += f"={_translate_value(defaults[var_name])}"
+                translated = _translate_value(defaults[var_name], f"{cpptype}")
+                arg_def += f"={translated}"
+                arg_annotation += f"={translated}"
             arg_defs.append(arg_def)
             # dont create an annotation for var(kw)args
             if arg_spec.varargs != var_name and arg_spec.varkw != var_name:

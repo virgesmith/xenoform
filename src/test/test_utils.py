@@ -1,4 +1,34 @@
-from xenoform.utils import group_headers
+import pytest
+
+from xenoform.utils import _translate_value, group_headers
+
+
+def test_translate_value() -> None:
+    # bool must be handled before int since bool subclasses int
+    assert _translate_value(True, "bool") == "true"
+    assert _translate_value(False, "bool") == "false"
+    # None maps to std::nullopt regardless of the optional type
+    assert _translate_value(None, "std::optional<int>") == "std::nullopt"
+    # numbers use repr, which is a valid C++ literal for these cases
+    assert _translate_value(5, "int") == "5"
+    assert _translate_value(1.5, "double") == "1.5"
+    # plain string is quoted
+    assert _translate_value("hi", "std::string") == '"hi"'
+    # double-quote and backslash are escaped
+    assert _translate_value('a"b\\c', "std::string") == '"a\\"b\\\\c"'
+    # newline and tab escapes
+    assert _translate_value("a\nb\tc", "std::string") == '"a\\nb\\tc"'
+    # non-ASCII uses octal escapes of the UTF-8 bytes (é -> 0xc3 0xa9 -> \303\251)
+    assert _translate_value("é", "std::string") == '"\\303\\251"'
+    # empty containers become value-initialised instances of the C++ type
+    assert _translate_value((), "std::tuple<>") == "std::tuple<>{}"
+    assert _translate_value([], "std::vector<int>") == "std::vector<int>{}"
+    # non-empty container cannot be translated
+    with pytest.raises(TypeError):
+        _translate_value([1, 2], "std::vector<int>")
+    # unknown type cannot be translated
+    with pytest.raises(TypeError):
+        _translate_value(object(), "auto")
 
 
 def test_group_headers_basic() -> None:
