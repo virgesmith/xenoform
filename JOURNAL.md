@@ -22,6 +22,64 @@ Entry template:
 
 ---
 
+## 2026-07-18 — Replace `@compile(verbose=...)` with the `XENOFORM_VERBOSE` env flag (#29)
+
+**Why** — `@compile(verbose=...)` mutated global logger state at *decoration (import) time*.
+`get_logger()` is `@cache`d, so there is one `Logger` per process, and `verbose=False` (the default)
+actively called `logger.disable()`. The consequence: any plain `@compile()` evaluated *after* an
+`@compile(verbose=True)` silenced the logging the first function had asked for — last decorator wins,
+process-wide, including from third-party code that merely uses xenoform. Closes #22.
+
+**What** — Removed the `verbose` decorator argument entirely and moved verbosity to a single
+global setting: `XENOFORM_VERBOSE`. `get_logger()` derives its enabled state from the config; the
+now-dead `Logger.enable()`/`disable()` mutators were deleted. README and tests updated; migration is
+`@compile(verbose=True)` → set `XENOFORM_VERBOSE` in the environment.
+
+**Design decisions**
+- *Removed the flag rather than scoping it per-module or making it enable-only* — the two options
+  the issue floated. The maintainer's call: verbosity is a whole-process debugging aid, and a
+  per-decorator knob was the entire source of the bug. A global env flag is unaffected by import
+  order, which is the property that was actually wanted; everything else about compilation is
+  already deferred to first call, so a decoration-time knob was doubly surprising.
+- *Presence-based `str | None`, modelled on `XENOFORM_DISABLE_FT`, not a `bool`.* A `bool` field
+  makes `XENOFORM_VERBOSE=` (present but empty) raise pydantic `bool_parsing`, so
+  `XENOFORM_VERBOSE= uv run python examples/loop.py` would fail. An intermediate version fixed that
+  with a `field_validator` coercing empty→`True`; rejected as needless once the field simply mirrors
+  `disable_ft` — presence (`verbose is not None`) is the whole semantics, value is irrelevant, and
+  the convention already exists in this file.
+- *Deleted `Logger.enable()`/`disable()`.* They existed only to serve the decorator's removed
+  mutation; the logger's enabled state is now set once at construction from config. Leaving them
+  would be dead code and would re-invite exactly the runtime global-toggling this change removes.
+
+**Follow-ups** — none. Verbosity is now process-global by construction; if per-module debug output
+is ever wanted it would need the `ModuleSpec`-scoped approach the issue described, but nobody has
+asked for it.
+
+## 2026-07-18 — Defer the import-time `sys.path.append` out of module scope (#28)
+
+**Why** — [compile.py](src/xenoform/compile.py) mutated `sys.path` as a side effect of *importing*
+`xenoform`: merely importing the library — even to read `__version__` or use `platform_specific` —
+appended `extmodule_root` to the host application's `sys.path`, with no duplicate guard, so
+re-imports in one process (test suites, reloads) could append the same entry repeatedly. Import
+should not have global side effects. Closes #21; ported from `xenoform-rs`#9.
+
+**What** — Moved the `sys.path.append` into `_check_build_fetch_module_impl` (first use) behind an
+`if root not in sys.path` guard, and dropped the module-level `extmodule_root` global in favour of
+reading `get_config().extmodule_root` at the use sites.
+
+**Design decisions**
+- *Moved, not removed — unlike `xenoform-rs`#9.* There the append turned out to be vestigial
+  because modules load by explicit path via `ExtensionFileLoader`. Here the build path ends in
+  `importlib.import_module(f"{ext_name}.{module_name}")` and `_get_module_checksum` imports by dotted
+  name in a subprocess, so `extmodule_root` genuinely has to be importable. The defect (import-time,
+  unguarded) is the same; the fix is deferral plus a guard, not deletion.
+- *Read `extmodule_root` through `get_config()` at use sites rather than snapshotting a module
+  global.* Makes the config the single source of truth, so a change to `XENOFORM_EXTMODULE_ROOT` is
+  no longer silently ignored after `import xenoform`. Folds in the smaller item tracked as
+  `xenoform-rs`#13; `get_config()` is `@cache`d so this is belt-and-braces, not a hot path.
+
+**Follow-ups** — none.
+
 ## 2026-07-17 — Adopt the `xenoform-rs` agent guidelines and journal
 
 **Why** — `xenoform` and [`xenoform-rs`](https://github.com/virgesmith/xenoform-rs) are siblings
