@@ -7,7 +7,7 @@ It is otherwise useless
 """
 
 
-@compile(help=docstr, verbose=True)
+@compile(help=docstr)
 def documented_function(n: int, *, x: float = 3.1) -> float:  # ty: ignore[empty-body]
     """
     return n + x;

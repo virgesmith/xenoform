@@ -101,7 +101,6 @@ kwarg | type(=default) | description
 `cxx_std` | `int=20` | C++ standard to compile against
 `return_value_policy` | `ReturnValuePolicy=ReturnValuePolicy.Automatic` | [Return value policy](https://pybind11.readthedocs.io/en/stable/advanced/functions.html#return-value-policies)
 `help` | `str \| None=None` | Docstring for the function
-`verbose` | `bool=False` | enable debug logging
 
 
 ## Performance
@@ -424,7 +423,8 @@ The generated module source code is written to `module.cpp` in a specific folder
 commands are redirected to `build.log` in the that folder. NB: build errors refuse to be redirected to a file, and
 `build.log` is not produced when running via pytest, due to the way it captures output streams.
 
-Adding `verbose=True` to the `compile(...)` decorator logs the steps taken, with timings, e.g.:
+Setting the environment variable `XENOFORM_VERBOSE=1` (or the `verbose` config setting) enables debug logging of the
+steps taken, with timings, e.g.:
 
 ```txt
 $ python perf.py

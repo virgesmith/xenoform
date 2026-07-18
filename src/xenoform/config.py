@@ -8,6 +8,7 @@ class XenoformConfig(BaseSettings):
     cpp_format: str = "file"
     disable_ft: str | None = None
     extmodule_root: Path = Path("./ext")
+    verbose: bool = False
 
     model_config = SettingsConfigDict(env_prefix="XENOFORM_", extra="ignore")
 

@@ -9,6 +9,7 @@ def test_config() -> None:
     assert config.disable_ft is os.getenv("XENOFORM_DISABLE_FT")
     assert config.extmodule_root == Path("./ext")
     assert config.cpp_format == "file"
+    assert config.verbose is False
 
 
 if __name__ == "__main__":

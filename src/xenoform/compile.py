@@ -175,7 +175,6 @@ def compile(
     return_value_policy: ReturnValuePolicy = ReturnValuePolicy.Automatic,
     cxx_std: int = 20,
     help: str | None = None,
-    verbose: bool = False,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     Decorator factory for compiling C/C++ function implementations into extension modules.
@@ -189,16 +188,13 @@ def compile(
         extra_link_args (list[str], optional): Extra arguments to pass to the linker.
         cxx_std (int, optional, default 20): C++ standard to compile
         help (str, optional): Docstring for the function
-        verbose (bool, optional, default False): enable debug logging
 
     Returns:
         Callable[..., Callable[..., Any]]: A function that when called, will return the compiled function.
-    """
 
-    if verbose:
-        logger.enable()
-    else:
-        logger.disable()
+    Debug logging is controlled globally via the `XENOFORM_VERBOSE` environment variable (or the
+    `verbose` config setting), not per-decorator.
+    """
 
     def register_function(func: Callable[P, R]) -> Callable[P, R]:
         """This registers the function, actual compilation is deferred"""
