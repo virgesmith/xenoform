@@ -174,15 +174,15 @@ def calc_balances_cpp(data: Annotated[pd.Series, "py::object"], rate: float) -> 
     """
 ```
 
-Needless to say, the C++ implementation vastly outperforms the python (3.13) implementation for all but the smallest arrays:
+Needless to say, the C++ implementation vastly outperforms the python (3.13) implementation for all but the smallest array — where the wall-clock time (measured with `perf_counter`) is dominated by the one-off cost of compiling and importing the extension module on the first call:
 
-N | py (ms) | cpp (ms) | speedup (%)
+N | py (ms) | cpp (ms) | speedup
 -:|--------:|---------:|-----------:
-1000 | 0.7 | 1.1 | -43
-10000 | 3.3 | 0.3 | 1067
-100000 | 35.1 | 1.7 | 1950
-1000000 | 311.5 | 6.5 | 4709
-10000000 | 2872.4 | 42.9 | 6601
+1000 | 0.3 | 30.1 | -99%
+10000 | 1.5 | 0.1 | 1100%
+100000 | 13.0 | 0.5 | 2500%
+1000000 | 124.0 | 4.4 | 2700%
+10000000 | 1230.0 | 40.5 | 2950%
 
 Full code is in [examples/loop.py](./examples/loop.py).
 
@@ -252,15 +252,15 @@ def calc_dist_matrix_cpp(points: npt.NDArray[np.float64]) -> npt.NDArray[np.floa
     """
 ```
 
-Execution times (in ms) are shown below for each implementation for a varying number of 3d points. Even at relatively small sizes, the compiled implementation is significantly faster.
+Wall-clock execution times (in ms, measured with `perf_counter`) are shown below for each implementation for a varying number of 3d points. Beyond the smallest size — where the first call pays the one-off cost of compiling and importing the extension module — the compiled implementation is significantly faster.
 
-N | py (ms) | cpp (ms) | speedup (%)
+N | py (ms) | cpp (ms) | speedup
 -:|--------:|---------:|-----------:
-100 | 0.5 | 2.5 | -82%
-300 | 3.2 | 2.2 | 46%
-1000 | 43.3 | 13.6 | 218%
-3000 | 208.2 | 82.5 | 152%
-10000 | 2269.0 | 803.2 | 183%
+100 | 0.4 | 30.0 | -99%
+300 | 4.0 | 0.2 | 1600%
+1000 | 40.0 | 0.9 | 4300%
+3000 | 315.0 | 11.0 | 2700%
+10000 | 3500.0 | 135.0 | 2500%
 
 Full code is in [examples/distance_matrix.py](./examples/distance_matrix.py).
 
