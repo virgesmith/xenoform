@@ -52,7 +52,7 @@ def calc_dist_matrix_cpp(points: npt.NDArray[np.float64]) -> npt.NDArray[np.floa
 
 
 if __name__ == "__main__":
-    print("N | py (ms) | cpp (ms) | speedup (%)")
+    print("N | py (ms) | cpp (ms) | speedup")
     print("-:|--------:|---------:|-----------:")
 
     for size in [100, 300, 1000, 3000, 10000]:

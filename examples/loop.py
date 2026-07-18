@@ -57,7 +57,7 @@ def main() -> None:
     rng = np.random.default_rng(19937)
     rate = 0.001
 
-    print("N | py (ms) | cpp (ms) | speedup (%)")
+    print("N | py (ms) | cpp (ms) | speedup")
     print("-:|--------:|---------:|-----------:")
     for n in [1000, 10000, 100000, 1000000, 10000000]:
         data = pd.Series(index=range(n), data=rng.integers(-100, 101, size=n), name="cashflow")
@@ -73,7 +73,7 @@ def main() -> None:
         cpp_time = perf_counter() - start
 
         # guard against a zero cpp_time (possible on platforms with a coarse timer for the smallest n)
-        speedup = f"{100 * (py_time / cpp_time - 1.0):.0f}" if cpp_time else "n/a"
+        speedup = f"{(py_time / cpp_time - 1.0):.0%}" if cpp_time else "n/a"
         print(f"{n} | {py_time * 1000:.1f} | {cpp_time * 1000:.1f} | {speedup}")
         assert py_result.equals(cpp_result)
 
