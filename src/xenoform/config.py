@@ -8,7 +8,9 @@ class XenoformConfig(BaseSettings):
     cpp_format: str = "file"
     disable_ft: str | None = None
     extmodule_root: Path = Path("./ext")
-    verbose: bool = False
+    # presence-based flag (like disable_ft): any value of XENOFORM_VERBOSE, including empty,
+    # enables verbose logging; only absence leaves it off
+    verbose: str | None = None
 
     model_config = SettingsConfigDict(env_prefix="XENOFORM_", extra="ignore")
 

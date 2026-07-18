@@ -1,7 +1,9 @@
 import os
 from pathlib import Path
 
-from xenoform.config import get_config
+import pytest
+
+from xenoform.config import XenoformConfig, get_config
 
 
 def test_config() -> None:
@@ -9,7 +11,19 @@ def test_config() -> None:
     assert config.disable_ft is os.getenv("XENOFORM_DISABLE_FT")
     assert config.extmodule_root == Path("./ext")
     assert config.cpp_format == "file"
-    assert config.verbose is False
+    assert config.verbose is os.getenv("XENOFORM_VERBOSE")
+
+
+@pytest.mark.parametrize("value", ["", "  ", "1", "true", "0", "false"])
+def test_verbose_env_presence_enables(monkeypatch, value: str) -> None:
+    # presence-based flag: any value of XENOFORM_VERBOSE (even empty) enables verbose logging (issue #22)
+    monkeypatch.setenv("XENOFORM_VERBOSE", value)
+    assert XenoformConfig().verbose is not None
+
+
+def test_verbose_env_absent_disables(monkeypatch) -> None:
+    monkeypatch.delenv("XENOFORM_VERBOSE", raising=False)
+    assert XenoformConfig().verbose is None
 
 
 if __name__ == "__main__":

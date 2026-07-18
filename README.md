@@ -423,8 +423,8 @@ The generated module source code is written to `module.cpp` in a specific folder
 commands are redirected to `build.log` in the that folder. NB: build errors refuse to be redirected to a file, and
 `build.log` is not produced when running via pytest, due to the way it captures output streams.
 
-Setting the environment variable `XENOFORM_VERBOSE=1` (or the `verbose` config setting) enables debug logging of the
-steps taken, with timings, e.g.:
+If xenoform detects an environment variable `XENOFORM_VERBOSE` (any value, including empty), debug logging of the steps
+taken is enabled, with timings, e.g.:
 
 ```txt
 $ python perf.py

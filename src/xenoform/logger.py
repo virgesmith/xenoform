@@ -20,5 +20,5 @@ class Logger:
 
 @cache
 def get_logger() -> Logger:
-    "Return logger, enabled per the XENOFORM_VERBOSE config setting (disabled by default)"
-    return Logger(enabled=get_config().verbose)
+    "Return logger, enabled when the XENOFORM_VERBOSE env var is set (disabled by default)"
+    return Logger(enabled=get_config().verbose is not None)

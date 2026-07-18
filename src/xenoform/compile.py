@@ -192,8 +192,8 @@ def compile(
     Returns:
         Callable[..., Callable[..., Any]]: A function that when called, will return the compiled function.
 
-    Debug logging is controlled globally via the `XENOFORM_VERBOSE` environment variable (or the
-    `verbose` config setting), not per-decorator.
+    Debug logging is controlled globally by the presence of the `XENOFORM_VERBOSE` environment
+    variable (any value enables it), not per-decorator.
     """
 
     def register_function(func: Callable[P, R]) -> Callable[P, R]:
