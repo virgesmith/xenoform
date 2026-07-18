@@ -5,7 +5,11 @@ import time
 import numpy as np
 import numpy.typing as npt
 
-from xenoform import compile
+from xenoform import compile, platform_specific
+
+# OpenMP is enabled via GCC/Clang's -fopenmp on Linux. Apple clang and MSVC don't accept that flag,
+# so elsewhere we pass nothing and the `#pragma omp` directives are simply ignored (correct, serial).
+_openmp = platform_specific({"Linux": ["-fopenmp"]}) or []
 
 
 def calc_dist_matrix_py(p: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
@@ -13,7 +17,7 @@ def calc_dist_matrix_py(p: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     return np.sqrt(((p[:, np.newaxis, :] - p[np.newaxis, :, :]) ** 2).sum(axis=2))
 
 
-@compile(extra_compile_args=["-fopenmp"], extra_link_args=["-fopenmp"])
+@compile(extra_compile_args=_openmp, extra_link_args=_openmp)
 def calc_dist_matrix_cpp(points: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:  # ty: ignore[empty-body]
     """
     py::buffer_info buf = points.request();

@@ -57,7 +57,16 @@ could land unnoticed on a branch.
 - *Enforce coverage on one job, not twelve.* Matches `xenoform-rs`; the platform-conditional lines
   mean the 100% target is only meaningful on the reference platform anyway.
 
-**Follow-ups** — None. The two pragma'd branches are the only intentionally-unmeasured code.
+**Follow-ups**
+- Running the examples across the full matrix surfaced two portability gaps (both pre-existing, but
+  never exercised in CI before). Fixed in this PR: `distance_matrix.py` hard-coded `-fopenmp`, which
+  Apple clang and MSVC reject — it now derives the flag via `platform_specific({"Linux": [...]})`,
+  so OpenMP is used on Linux and the `#pragma omp` directives are harmlessly ignored (serial) on
+  macOS/Windows.
+- The "outdated → rebuild" step of the caching lifecycle test is skipped on Windows, where a loaded
+  `.pyd` is locked and cannot be overwritten in-process. The branch is still covered by the
+  ubuntu-latest coverage gate.
+- The two pragma'd branches are the only intentionally-unmeasured code.
 
 ---
 

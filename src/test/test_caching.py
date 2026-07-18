@@ -1,5 +1,6 @@
 import importlib
 import shutil
+import sys
 from unittest.mock import MagicMock
 
 from xenoform.config import get_config
@@ -87,9 +88,13 @@ def test_rebuild_lifecycle(monkeypatch) -> None:
 
     # 3. changed source -> checksum differs -> "outdated" -> rebuild
     # (the in-process module object is not reloaded by design, so we assert on the logs, not the value)
-    mock_logger.reset_mock()
-    compile_module._check_build_fetch_module_impl(module_name, _spec("[]() { return 43; }"))
-    assert any("outdated" in log for log in logs())
-    assert any("(re)building" in log for log in logs())
+    # Skipped on Windows: the .pyd imported in step 1 is locked while loaded, so rebuilding it
+    # in-process fails with PermissionError. Coverage is measured on ubuntu-latest, so the "outdated"
+    # branch is still exercised by the gate.
+    if sys.platform != "win32":
+        mock_logger.reset_mock()
+        compile_module._check_build_fetch_module_impl(module_name, _spec("[]() { return 43; }"))
+        assert any("outdated" in log for log in logs())
+        assert any("(re)building" in log for log in logs())
 
     shutil.rmtree(ext_dir, ignore_errors=True)
