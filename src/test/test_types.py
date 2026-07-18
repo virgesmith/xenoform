@@ -140,6 +140,10 @@ def test_parse_annotation() -> None:
     with pytest.raises(TypeError):
         parse_annotation(Annotated[int, 42])  # ty: ignore[invalid-argument-type]
 
+    # more than one metadata entry is ambiguous
+    with pytest.raises(CppTypeError):
+        parse_annotation(Annotated[int, "size_t", "uint32_t"])  # ty: ignore[invalid-argument-type]
+
 
 def test_overridden_annotated_types() -> None:
     cpptype = translate_type(Annotated[int, "uint32_t"])  # ty: ignore[invalid-argument-type]

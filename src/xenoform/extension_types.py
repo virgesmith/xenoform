@@ -83,7 +83,7 @@ class CppTypeTree:
     """Mapped tree structure for C++ types"""
 
     def __init__(self, tree: PyTypeTree, *, override: str | None = None) -> None:
-        self.type = DEFAULT_TYPE_MAPPING.get(tree.type)  # ty: ignore[invalid-argument-type]
+        self.type = DEFAULT_TYPE_MAPPING.get(tree.type)
         if not self.type and not override:
             raise CppTypeError(f"Don't know a C++ type for '{tree.type}' and no override provided")
         self.override = override
@@ -133,7 +133,9 @@ def parse_annotation(origin: type) -> tuple[type, dict[str, str]]:
     Extract content from Annotation, if present
     """
     t = get_origin(origin)
-    if t is None and get_args(origin):
+    if t is None and get_args(origin):  # pragma: no cover
+        # defensive: get_origin() and get_args() are consistent for standard typing constructs
+        # (args non-empty implies a recognised origin), so this pairing is not reachable in practice
         raise CppTypeError("Python types with no default mapping must be annotated with a type override")
     if t is Annotated:
         base, *extras = get_args(origin)

@@ -175,7 +175,9 @@ def group_headers(headers: list[str]) -> list[list[str]]:
 
 def build_freethreaded() -> bool:
     """Return whether interpreter is free-threaded AND free-threading hasn't been manually overridden"""
-    if not hasattr(sys, "_is_gil_enabled"):
+    if not hasattr(sys, "_is_gil_enabled"):  # pragma: no cover
+        # sys._is_gil_enabled was added in 3.13; the guard is only taken on 3.12, but coverage is
+        # measured on the 3.14 job (see .github/workflows/lint-test.yml) where it never fires
         return False
     return not (sys._is_gil_enabled() or get_config().disable_ft is not None)
 
