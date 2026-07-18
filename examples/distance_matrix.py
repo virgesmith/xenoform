@@ -52,6 +52,14 @@ def calc_dist_matrix_cpp(points: npt.NDArray[np.float64]) -> npt.NDArray[np.floa
 
 
 if __name__ == "__main__":
+    # Preload the compiled function before any timing, so everything is compiled and loaded before
+    # the clock starts. The one-off first-call cost is compiling the extension if it is missing or
+    # out of date, otherwise loading the module, checking it is up-to-date, and diverting the Python
+    # stub to the C++ implementation. Warming it up here keeps that cost out of the per-call timings
+    # below.
+    warmup = np.random.uniform(size=(2, 3))
+    calc_dist_matrix_cpp(warmup)
+
     print("N | py (ms) | cpp (ms) | speedup")
     print("-:|--------:|---------:|-----------:")
 

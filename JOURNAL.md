@@ -22,6 +22,35 @@ Entry template:
 
 ---
 
+## 2026-07-18 — Preload compiled functions before benchmarking in examples
+
+**Why** — The README claimed the smallest-array `cpp` timing was dominated by "compiling and
+importing the extension module on the first call", producing a misleading `-99%` speedup at the
+smallest N. That explanation was wrong: the extension is not (re)compiled on a warm run. The real
+first-call cost comes from `_get_function` → `_get_module` → `_check_build_fetch_module_impl`, which
+spawns a subprocess to verify the module checksum, imports the module, and diverts the Python stub to
+the C++ implementation. That load/check/redirect cost was landing on the first timed `cpp` call.
+
+**What** —
+- `examples/loop.py` and `examples/distance_matrix.py` now call the compiled function once (a tiny
+  warm-up input) before the timing loop, so the module is built-if-needed, loaded, and redirected
+  before the clock starts.
+- README prose in both benchmark sections rewritten to describe the real cost accurately; both
+  tables refreshed with measured numbers. The smallest N now shows a genuine speedup instead of
+  `-99%`. Corrected the Python version reference 3.13 → 3.14.
+
+**Design decisions**
+- Warm-up describes the first-call cost as "compile if missing/out of date, otherwise load, check,
+  redirect" rather than asserting the extension is already compiled — the warm-up genuinely triggers
+  compilation on a cold checkout, and only load/check/redirect on a warm one.
+- Do **not** time or report the warm-up. Considered printing a "preload: N ms" line, but the figure
+  conflates two very different regimes (fresh compile vs. warm load) and isn't a stable, meaningful
+  number, so it would mislead more than inform. The warm-up's only job is to keep the one-off cost
+  out of the per-call timings.
+
+**Follow-ups** — The `cpp_time == 0` guard at the smallest N is retained: preloading removes the
+first-call cost but coarse-timer platforms can still measure a sub-tick `cpp` time.
+
 ## 2026-07-18 — Enforce 100% coverage + examples in CI, tidy pre-commit (#30)
 
 **Why** — Two gaps versus `xenoform-rs`, ported as issues #23 and #24. The `ty` type-check gate was

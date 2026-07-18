@@ -57,6 +57,14 @@ def main() -> None:
     rng = np.random.default_rng(19937)
     rate = 0.001
 
+    # Preload the compiled function before any timing, so everything is compiled and loaded before
+    # the clock starts. The one-off first-call cost is compiling the extension if it is missing or
+    # out of date, otherwise loading the module, checking it is up-to-date, and diverting the Python
+    # stub to the C++ implementation. Warming it up here keeps that cost out of the per-call timings
+    # below.
+    warmup = pd.Series(index=range(1), data=rng.integers(-100, 101, size=1), name="cashflow")
+    calc_balances_cpp(warmup, rate)
+
     print("N | py (ms) | cpp (ms) | speedup")
     print("-:|--------:|---------:|-----------:")
     for n in [1000, 10000, 100000, 1000000, 10000000]:

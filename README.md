@@ -174,15 +174,15 @@ def calc_balances_cpp(data: Annotated[pd.Series, "py::object"], rate: float) -> 
     """
 ```
 
-Needless to say, the C++ implementation vastly outperforms the python (3.13) implementation for all but the smallest array — where the wall-clock time (measured with `perf_counter`) is dominated by the one-off cost of compiling and importing the extension module on the first call:
+Needless to say, the C++ implementation vastly outperforms the python (3.14) implementation across the board, once the extension has been preloaded. The first call to a compiled function incurs a one-off cost: it compiles the extension if it is missing or out of date, otherwise it just loads the module, checks it is up-to-date, and diverts the Python stub to the C++ implementation. The example preloads the function so that everything is compiled and loaded before timing starts, keeping that cost out of the per-call wall-clock times (measured with `perf_counter`):
 
 N | py (ms) | cpp (ms) | speedup
 -:|--------:|---------:|-----------:
-1000 | 0.3 | 30.1 | -99%
-10000 | 1.5 | 0.1 | 1100%
-100000 | 13.0 | 0.5 | 2500%
-1000000 | 124.0 | 4.4 | 2700%
-10000000 | 1230.0 | 40.5 | 2950%
+1000 | 0.3 | 0.1 | 208%
+10000 | 1.8 | 0.1 | 1576%
+100000 | 13.4 | 0.5 | 2396%
+1000000 | 124.9 | 4.2 | 2870%
+10000000 | 1234.8 | 41.1 | 2905%
 
 Full code is in [examples/loop.py](./examples/loop.py).
 
@@ -252,15 +252,15 @@ def calc_dist_matrix_cpp(points: npt.NDArray[np.float64]) -> npt.NDArray[np.floa
     """
 ```
 
-Wall-clock execution times (in ms, measured with `perf_counter`) are shown below for each implementation for a varying number of 3d points. Beyond the smallest size — where the first call pays the one-off cost of compiling and importing the extension module — the compiled implementation is significantly faster.
+Wall-clock execution times (in ms, measured with `perf_counter`) are shown below for each implementation for a varying number of 3d points. The compiled function is preloaded before timing so that everything is compiled and loaded before the clock starts, keeping the one-off first-call cost — compiling the extension if it is missing or out of date, otherwise loading the module, checking it is up-to-date, and diverting the Python stub to the C++ implementation — out of the per-call times. The compiled implementation is significantly faster throughout.
 
 N | py (ms) | cpp (ms) | speedup
 -:|--------:|---------:|-----------:
-100 | 0.4 | 30.0 | -99%
-300 | 4.0 | 0.2 | 1600%
-1000 | 40.0 | 0.9 | 4300%
-3000 | 315.0 | 11.0 | 2700%
-10000 | 3500.0 | 135.0 | 2500%
+100 | 0.5 | 0.2 | 174%
+300 | 6.2 | 0.3 | 2232%
+1000 | 42.3 | 0.8 | 5258%
+3000 | 332.1 | 10.3 | 3134%
+10000 | 3618.8 | 155.4 | 2229%
 
 Full code is in [examples/distance_matrix.py](./examples/distance_matrix.py).
 
