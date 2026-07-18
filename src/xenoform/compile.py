@@ -22,11 +22,6 @@ from xenoform.errors import AnnotationError, CompilationError
 from xenoform.logger import get_logger
 from xenoform.utils import deduplicate, get_function_scope, translate_function_signature
 
-extmodule_root = get_config().extmodule_root
-
-# ensure the module directory is available to Python
-sys.path.append(str(extmodule_root))
-
 logger = get_logger()
 
 _module_registry: dict[str, ModuleSpec] = defaultdict(ModuleSpec)
@@ -65,6 +60,13 @@ def _check_build_fetch_module_impl(
     module_name: str,
     module_spec: ModuleSpec,
 ) -> ModuleType:
+    extmodule_root = get_config().extmodule_root
+
+    # ensure the module directory is importable (deferred to first use, with a duplicate guard)
+    root = str(extmodule_root)
+    if root not in sys.path:
+        sys.path.append(root)
+
     ext_name = module_name + "_ext"
 
     module_dir = extmodule_root / ext_name
@@ -200,6 +202,8 @@ def compile(
 
     def register_function(func: Callable[P, R]) -> Callable[P, R]:
         """This registers the function, actual compilation is deferred"""
+        extmodule_root = get_config().extmodule_root
+
         scope = get_function_scope(func)
 
         _check_annotations(func)
