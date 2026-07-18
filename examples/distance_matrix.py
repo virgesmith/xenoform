@@ -58,16 +58,19 @@ if __name__ == "__main__":
     for size in [100, 300, 1000, 3000, 10000]:
         p = np.random.uniform(size=(size, 3))
 
-        start = time.process_time()
+        # perf_counter (wall clock) rather than process_time: it has finer resolution and, unlike
+        # summed CPU time, reflects the wall-clock speedup from the OpenMP-parallel C++
+        start = time.perf_counter()
         dist_p = calc_dist_matrix_py(p)
-        elapsed_p = time.process_time() - start
+        elapsed_p = time.perf_counter() - start
 
-        start = time.process_time()
+        start = time.perf_counter()
         dist_c = calc_dist_matrix_cpp(p)
-        elapsed_c = time.process_time() - start
+        elapsed_c = time.perf_counter() - start
 
         assert np.abs(dist_c - dist_p).max() < 1e-15
 
-        speedup = elapsed_p / elapsed_c - 1.0
+        # guard against a zero elapsed_c (possible on platforms with a coarse timer for the smallest size)
+        speedup = f"{elapsed_p / elapsed_c - 1.0:.0%}" if elapsed_c else "n/a"
 
-        print(f"{size} | {elapsed_p * 1000:.1f} | {elapsed_c * 1000:.1f} | {speedup:.0%}")
+        print(f"{size} | {elapsed_p * 1000:.1f} | {elapsed_c * 1000:.1f} | {speedup}")

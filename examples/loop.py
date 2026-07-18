@@ -1,6 +1,6 @@
 """Example of unvectorisable function performance - python vs inline C++"""
 
-from time import process_time
+from time import perf_counter
 from typing import Annotated
 
 import numpy as np
@@ -62,17 +62,19 @@ def main() -> None:
     for n in [1000, 10000, 100000, 1000000, 10000000]:
         data = pd.Series(index=range(n), data=rng.integers(-100, 101, size=n), name="cashflow")
 
-        start = process_time()
+        start = perf_counter()
         py_result = calc_balances_py(data, rate)
-        py_time = process_time() - start
+        py_time = perf_counter() - start
 
-        start = process_time()
+        start = perf_counter()
         # Although pybind11/C++ doesn't understand the type pd.Series, it can use the py::object API to manipulate
         # and create instances of this type
         cpp_result = calc_balances_cpp(data, rate)
-        cpp_time = process_time() - start
+        cpp_time = perf_counter() - start
 
-        print(f"{n} | {py_time * 1000:.1f} | {cpp_time * 1000:.1f} | {100 * (py_time / cpp_time - 1.0):.0f}")
+        # guard against a zero cpp_time (possible on platforms with a coarse timer for the smallest n)
+        speedup = f"{100 * (py_time / cpp_time - 1.0):.0f}" if cpp_time else "n/a"
+        print(f"{n} | {py_time * 1000:.1f} | {cpp_time * 1000:.1f} | {speedup}")
         assert py_result.equals(cpp_result)
 
 
