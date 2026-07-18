@@ -19,20 +19,18 @@ def max(i: int, j: int) -> int:  # ty: ignore[empty-body]
 
 Here's what happens automatically when you import a module with `@compile`-decorated functions:
 
-**First import, or after code or configuration changes:**
+**First call or after code changes:**
 
 1. C++ source code is generated with the Python type signatures translated to C++
 2. The extension module is compiled
-3. The decorated Python functions are redirected to their compiled C++ implementations
+3. The decorated Python functions are replaced with their compiled C++ implementations
 
-**Subsequent imports:**
-The extension module is already built, so nothing is recompiled. The overhead is just loading the prebuilt
-module, checking that its hashes are up-to-date, and redirecting the decorated functions to their compiled
-implementations. Once redirected, the C++ functions execute directly.
+**Subsequent calls:**
+The C++ functions execute directly with minimal overhead.
 
 **Change detection:**
 Each module stores a hash of its source code and configuration. On import, xenoform checks these hashes and
-automatically rebuilds the module only if any changes are detected.
+automatically rebuilds the module if any changes are detected.
 
 **Where files go:**
 By default, the `ext` subfolder contains binaries, generated source code, and build logs. To change this location see
