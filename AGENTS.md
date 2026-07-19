@@ -189,7 +189,7 @@ as a dependency). Tests compile real C++ at runtime. The `build_libs` fixture in
 [src/test/conftest.py](src/test/conftest.py) additionally shells out to `g++` and `ar` to build a
 static and a shared library for the external-linkage tests.
 
-Pre-commit hooks (`uv-lock`, `ruff-check --fix`, `ruff-format`) are configured in
+Pre-commit hooks (`uv-lock`, `ruff-check --fix`, `ruff-format`, `ty`) are configured in
 [.pre-commit-config.yaml](.pre-commit-config.yaml); run `uv run pre-commit install` once, or
 `uv run pre-commit run --all-files` on demand.
 
@@ -211,9 +211,14 @@ uv run examples/loop.py           # examples still work
 uv run examples/distance_matrix.py
 ```
 
-`pytest` runs with `--cov=src/xenoform --cov-fail-under=97 --doctest-modules`, so **keep coverage at
-or above 97%** and make sure docstring examples still pass. Tests compile and execute real C++, so
-they are inherently integration-level — every code path should be exercised.
+`pytest` runs with `--cov=src/xenoform --doctest-modules`, reporting coverage and running the
+docstring examples. **Coverage must stay at 100%**, but the threshold is *not* enforced locally:
+a pre-existing `ext/` skews which build/caching branches run, so a local run can read below 100%.
+The `--cov-fail-under=100` gate is enforced in CI on the `3.14 / ubuntu-latest` job, which starts
+from a clean checkout (`ext/` is gitignored) so every build path is exercised. To reproduce the CI
+number locally, `rm -rf ext` first. Genuinely unreachable branches (a 3.12-only free-threading
+guard, a defensive typing check) are excluded with `# pragma: no cover`. Tests compile and execute
+real C++, so they are inherently integration-level — every code path should be exercised.
 
 ## Developer Rules
 
@@ -286,7 +291,7 @@ When reviewing a PR or diff, check:
 5. **Free-threaded correctness** — anything touching the module template or build must work
    under `3.14t`.
 6. **Test coverage** — each new type, decorator parameter, or error path needs a test in
-   [src/test/](src/test/); coverage must stay at or above the configured threshold.
+   [src/test/](src/test/); coverage must stay at 100% (enforced in CI on a clean checkout).
 7. **API consistency** — new `@compile` parameters must follow existing naming conventions and be
    documented in [README.md](README.md).
 8. **Types** — return types and generics should be precise. Avoid `Any` unless unavoidable.

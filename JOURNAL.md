@@ -22,6 +22,83 @@ Entry template:
 
 ---
 
+## 2026-07-18 — Preload compiled functions before benchmarking in examples
+
+**Why** — The README claimed the smallest-array `cpp` timing was dominated by "compiling and
+importing the extension module on the first call", producing a misleading `-99%` speedup at the
+smallest N. That explanation was wrong: the extension is not (re)compiled on a warm run. The real
+first-call cost comes from `_get_function` → `_get_module` → `_check_build_fetch_module_impl`, which
+spawns a subprocess to verify the module checksum, imports the module, and diverts the Python stub to
+the C++ implementation. That load/check/redirect cost was landing on the first timed `cpp` call.
+
+**What** —
+- `examples/loop.py` and `examples/distance_matrix.py` now call the compiled function once (a tiny
+  warm-up input) before the timing loop, so the module is built-if-needed, loaded, and redirected
+  before the clock starts.
+- README prose in both benchmark sections rewritten to describe the real cost accurately; both
+  tables refreshed with measured numbers. The smallest N now shows a genuine speedup instead of
+  `-99%`. Corrected the Python version reference 3.13 → 3.14.
+
+**Design decisions**
+- Warm-up describes the first-call cost as "compile if missing/out of date, otherwise load, check,
+  redirect" rather than asserting the extension is already compiled — the warm-up genuinely triggers
+  compilation on a cold checkout, and only load/check/redirect on a warm one.
+- Do **not** time or report the warm-up. Considered printing a "preload: N ms" line, but the figure
+  conflates two very different regimes (fresh compile vs. warm load) and isn't a stable, meaningful
+  number, so it would mislead more than inform. The warm-up's only job is to keep the one-off cost
+  out of the per-call timings.
+
+**Follow-ups** — The `cpp_time == 0` guard at the smallest N is retained: preloading removes the
+first-call cost but coarse-timer platforms can still measure a sub-tick `cpp` time.
+
+## 2026-07-18 — Enforce 100% coverage + examples in CI, tidy pre-commit (#30)
+
+**Why** — Two gaps versus `xenoform-rs`, ported as issues #23 and #24. The `ty` type-check gate was
+documented but not enforced by a pre-commit hook (the hook repo didn't exist when the config was
+written), the pins lagged, and `.pre-commit-config.yaml` had a duplicated `repos:` key. Separately,
+coverage and the examples were only local gates: an example could rot and a coverage regression
+could land unnoticed on a branch.
+
+**What** —
+- **#23** — Dropped the stray duplicate `repos:`, bumped `uv-pre-commit` → 0.11.28 and
+  `ruff-pre-commit` → v0.15.20, and added the `ty` hook (v0.0.56). The hook pins a newer `ty` than
+  the dev dependency resolved (0.0.37), so I bumped `ty>=0.0.56` to keep the hook and CI's
+  `uv run ty check` on the same version; the newer `ty` no longer needs a `# ty: ignore` directive
+  in `extension_types.py`, so that was removed.
+- **#24** — CI now enforces coverage on exactly one matrix job (`3.14 / ubuntu-latest`) via
+  `--cov-fail-under=100`; the other jobs run `pytest --no-cov`. Every example runs as a CI gate.
+  Raised the bar 97 → 100 with new tests for the previously-uncovered paths (build/caching
+  lifecycle, an over-annotated type, the verbose logger, the clang-format failure fallback) and two
+  `# pragma: no cover` exclusions for genuinely unreachable branches.
+
+**Design decisions**
+- *Coverage threshold is enforced in CI only, not in local `addopts`.* A pre-existing `ext/` changes
+  which build/caching branches run (a warm build skips the "not found → build" path; a clean build
+  skips "up-to-date"/"outdated"), so a local run legitimately reads below 100%. Enforcing locally
+  would produce false failures; CI enforces on a clean checkout (`ext/` is gitignored) where the
+  number is deterministic. Local runs still report coverage.
+- *100% over a documented 97%.* Read the report first (per the issue). Most of the missing 3% was
+  real, testable paths, not platform noise — the caching lifecycle test alone recovered several
+  branches deterministically by driving `_check_build_fetch_module_impl` directly (it sits behind
+  the `@cache` on `_get_module`, so a normal `@compile` call only ever hits one branch per process).
+  Only two branches are genuinely unreachable on the coverage job and got pragmas: the 3.12-only
+  free-threading `hasattr` guard, and a defensive `get_origin`/`get_args` inconsistency check.
+- *Enforce coverage on one job, not twelve.* Matches `xenoform-rs`; the platform-conditional lines
+  mean the 100% target is only meaningful on the reference platform anyway.
+
+**Follow-ups**
+- Running the examples across the full matrix surfaced two portability gaps (both pre-existing, but
+  never exercised in CI before). Fixed in this PR: `distance_matrix.py` hard-coded `-fopenmp`, which
+  Apple clang and MSVC reject — it now derives the flag via `platform_specific({"Linux": [...]})`,
+  so OpenMP is used on Linux and the `#pragma omp` directives are harmlessly ignored (serial) on
+  macOS/Windows.
+- The "outdated → rebuild" step of the caching lifecycle test is skipped on Windows, where a loaded
+  `.pyd` is locked and cannot be overwritten in-process. The branch is still covered by the
+  ubuntu-latest coverage gate.
+- The two pragma'd branches are the only intentionally-unmeasured code.
+
+---
+
 ## 2026-07-18 — Replace `@compile(verbose=...)` with the `XENOFORM_VERBOSE` env flag (#29)
 
 **Why** — `@compile(verbose=...)` mutated global logger state at *decoration (import) time*.

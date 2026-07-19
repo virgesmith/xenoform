@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from xenoform.config import XenoformConfig, get_config
+from xenoform.logger import Logger
 
 
 def test_config() -> None:
@@ -24,6 +25,17 @@ def test_verbose_env_presence_enables(monkeypatch, value: str) -> None:
 def test_verbose_env_absent_disables(monkeypatch) -> None:
     monkeypatch.delenv("XENOFORM_VERBOSE", raising=False)
     assert XenoformConfig().verbose is None
+
+
+def test_logger_emits_when_enabled(capsys) -> None:
+    Logger(enabled=True)("hello", "world")
+    out = capsys.readouterr().out
+    assert "hello world" in out
+
+
+def test_logger_silent_when_disabled(capsys) -> None:
+    Logger(enabled=False)("hello")
+    assert capsys.readouterr().out == ""
 
 
 if __name__ == "__main__":

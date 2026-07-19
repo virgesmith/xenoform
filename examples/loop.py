@@ -1,6 +1,6 @@
 """Example of unvectorisable function performance - python vs inline C++"""
 
-from time import process_time
+from time import perf_counter
 from typing import Annotated
 
 import numpy as np
@@ -57,22 +57,32 @@ def main() -> None:
     rng = np.random.default_rng(19937)
     rate = 0.001
 
-    print("N | py (ms) | cpp (ms) | speedup (%)")
+    # Preload the compiled function before any timing, so everything is compiled and loaded before
+    # the clock starts. The one-off first-call cost is compiling the extension if it is missing or
+    # out of date, otherwise loading the module, checking it is up-to-date, and diverting the Python
+    # stub to the C++ implementation. Warming it up here keeps that cost out of the per-call timings
+    # below.
+    warmup = pd.Series(index=range(1), data=rng.integers(-100, 101, size=1), name="cashflow")
+    calc_balances_cpp(warmup, rate)
+
+    print("N | py (ms) | cpp (ms) | speedup")
     print("-:|--------:|---------:|-----------:")
     for n in [1000, 10000, 100000, 1000000, 10000000]:
         data = pd.Series(index=range(n), data=rng.integers(-100, 101, size=n), name="cashflow")
 
-        start = process_time()
+        start = perf_counter()
         py_result = calc_balances_py(data, rate)
-        py_time = process_time() - start
+        py_time = perf_counter() - start
 
-        start = process_time()
+        start = perf_counter()
         # Although pybind11/C++ doesn't understand the type pd.Series, it can use the py::object API to manipulate
         # and create instances of this type
         cpp_result = calc_balances_cpp(data, rate)
-        cpp_time = process_time() - start
+        cpp_time = perf_counter() - start
 
-        print(f"{n} | {py_time * 1000:.1f} | {cpp_time * 1000:.1f} | {100 * (py_time / cpp_time - 1.0):.0f}")
+        # guard against a zero cpp_time (possible on platforms with a coarse timer for the smallest n)
+        speedup = f"{(py_time / cpp_time - 1.0):.0%}" if cpp_time else "n/a"
+        print(f"{n} | {py_time * 1000:.1f} | {cpp_time * 1000:.1f} | {speedup}")
         assert py_result.equals(cpp_result)
 
 

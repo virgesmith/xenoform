@@ -5,7 +5,11 @@ import time
 import numpy as np
 import numpy.typing as npt
 
-from xenoform import compile
+from xenoform import compile, platform_specific
+
+# OpenMP is enabled via GCC/Clang's -fopenmp on Linux. Apple clang and MSVC don't accept that flag,
+# so elsewhere we pass nothing and the `#pragma omp` directives are simply ignored (correct, serial).
+_openmp = platform_specific({"Linux": ["-fopenmp"]}) or []
 
 
 def calc_dist_matrix_py(p: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
@@ -13,7 +17,7 @@ def calc_dist_matrix_py(p: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     return np.sqrt(((p[:, np.newaxis, :] - p[np.newaxis, :, :]) ** 2).sum(axis=2))
 
 
-@compile(extra_compile_args=["-fopenmp"], extra_link_args=["-fopenmp"])
+@compile(extra_compile_args=_openmp, extra_link_args=_openmp)
 def calc_dist_matrix_cpp(points: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:  # ty: ignore[empty-body]
     """
     py::buffer_info buf = points.request();
@@ -48,22 +52,35 @@ def calc_dist_matrix_cpp(points: npt.NDArray[np.float64]) -> npt.NDArray[np.floa
 
 
 if __name__ == "__main__":
-    print("N | py (ms) | cpp (ms) | speedup (%)")
+    # Preload the compiled function before any timing, so everything is compiled and loaded before
+    # the clock starts. The one-off first-call cost is compiling the extension if it is missing or
+    # out of date, otherwise loading the module, checking it is up-to-date, and diverting the Python
+    # stub to the C++ implementation. Warming it up here keeps that cost out of the per-call timings
+    # below.
+    warmup = np.random.uniform(size=(2, 3))
+    calc_dist_matrix_cpp(warmup)
+
+    print("N | py (ms) | cpp (ms) | speedup")
     print("-:|--------:|---------:|-----------:")
 
     for size in [100, 300, 1000, 3000, 10000]:
         p = np.random.uniform(size=(size, 3))
 
-        start = time.process_time()
+        # perf_counter (wall clock) rather than process_time: we want the elapsed time a caller
+        # actually waits. process_time sums CPU time across all cores, so the OpenMP-parallel C++
+        # is charged ~N_cores as much (e.g. ~7x wall on a 16-core box) and its real speedup would
+        # be hidden — or inverted into an apparent slowdown against single-threaded numpy.
+        start = time.perf_counter()
         dist_p = calc_dist_matrix_py(p)
-        elapsed_p = time.process_time() - start
+        elapsed_p = time.perf_counter() - start
 
-        start = time.process_time()
+        start = time.perf_counter()
         dist_c = calc_dist_matrix_cpp(p)
-        elapsed_c = time.process_time() - start
+        elapsed_c = time.perf_counter() - start
 
         assert np.abs(dist_c - dist_p).max() < 1e-15
 
-        speedup = elapsed_p / elapsed_c - 1.0
+        # guard against a zero elapsed_c (possible on platforms with a coarse timer for the smallest size)
+        speedup = f"{elapsed_p / elapsed_c - 1.0:.0%}" if elapsed_c else "n/a"
 
-        print(f"{size} | {elapsed_p * 1000:.1f} | {elapsed_c * 1000:.1f} | {speedup:.0%}")
+        print(f"{size} | {elapsed_p * 1000:.1f} | {elapsed_c * 1000:.1f} | {speedup}")

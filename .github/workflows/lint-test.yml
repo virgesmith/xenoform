@@ -27,6 +27,16 @@ jobs:
       run: |
         uv run ruff check
         uv run ty check
+    # Coverage is enforced on exactly one job (3.14 / ubuntu-latest) so the cost is paid once,
+    # and on a clean checkout (`ext/` is gitignored, so a fresh clone has no pre-built modules)
+    # so every build/caching branch is exercised. Other jobs run plain pytest without coverage.
     - name: Test
+      if: matrix.python-version != '3.14' || matrix.os != 'ubuntu-latest'
+      run: uv run pytest -sv --no-cov
+    - name: Test with coverage
+      if: matrix.python-version == '3.14' && matrix.os == 'ubuntu-latest'
+      run: uv run pytest -sv --cov-fail-under=100
+    - name: Run examples
       run: |
-        uv run pytest -sv
+        uv run examples/loop.py
+        uv run examples/distance_matrix.py
