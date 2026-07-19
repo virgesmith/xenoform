@@ -108,6 +108,8 @@ kwarg | type(=default) | description
 To run the example scripts, install the "examples" extra, e.g. `pip install xenoform[examples]` or
 `uv sync --extra examples`. Links to the code can be found below.
 
+The examples preload their functions so that everything is compiled and loaded before timing starts, keeping that cost out of the per-call wall-clock times (measured with `perf_counter`). Whilst compilation time will vary widely, the one-off initialisation cost of loading the extension, checking it's up-to-date and redirecting the python stub is around 30ms.
+
 ### Loops
 
 Implementing loops in optimised compiled code can be orders of magnitude faster than loops in Python. Consider this
@@ -174,25 +176,25 @@ def calc_balances_cpp(data: Annotated[pd.Series, "py::object"], rate: float) -> 
     """
 ```
 
-Needless to say, the C++ implementation vastly outperforms the python (3.14) implementation across the board, once the extension has been preloaded. The first call to a compiled function incurs a one-off cost: it compiles the extension if it is missing or out of date, otherwise it just loads the module, checks it is up-to-date, and diverts the Python stub to the C++ implementation. The example preloads the function so that everything is compiled and loaded before timing starts, keeping that cost out of the per-call wall-clock times (measured with `perf_counter`):
+Needless to say the C++ implementation vastly outperforms the python (3.14) implementation across the board:
 
 N | py (ms) | cpp (ms) | speedup
 -:|--------:|---------:|-----------:
-1000 | 0.3 | 0.1 | 208%
-10000 | 1.8 | 0.1 | 1576%
-100000 | 13.4 | 0.5 | 2396%
-1000000 | 124.9 | 4.2 | 2870%
-10000000 | 1234.8 | 41.1 | 2905%
+1000 | 0.2 | 0.1 | 261%
+10000 | 1.4 | 0.1 | 1485%
+100000 | 14.2 | 0.6 | 2384%
+1000000 | 122.5 | 3.5 | 3385%
+10000000 | 1225.9 | 28.6 | 4185%
 
 Full code is in [examples/loop.py](./examples/loop.py).
 
 ### `numpy` and vectorised operations
 
 > "vectorisation" in this sense means implementing loops in compiled - rather than interpreted - code. In fact, the C++
-implementation below also various optimisations including but by no means limited to "true" vectorisation (meaning
+implementation below also implements various optimisations including but by no means limited to "true" vectorisation (meaning
 hardware SIMD instructions).
 
-For "standard" linear algebra and array operations, implementations in *xenoform* are very unlikely to improve on heavily
+For "standard" linear algebra and array operations, implementations in *xenoform* are unlikely to significantly outperform heavily
 optimised numpy implementations, such as matrix multiplication.
 
 However, significant performance improvements may be seen for more "bespoke" operations, particularly for
@@ -252,15 +254,24 @@ def calc_dist_matrix_cpp(points: npt.NDArray[np.float64]) -> npt.NDArray[np.floa
     """
 ```
 
-Wall-clock execution times (in ms, measured with `perf_counter`) are shown below for each implementation for a varying number of 3d points. The compiled function is preloaded before timing so that everything is compiled and loaded before the clock starts, keeping the one-off first-call cost — compiling the extension if it is missing or out of date, otherwise loading the module, checking it is up-to-date, and diverting the Python stub to the C++ implementation — out of the per-call times. The compiled implementation is significantly faster throughout.
+Wall-clock execution times (in ms, measured with `perf_counter`) are shown below for each implementation for a varying number of 3d points. The compiled implementation is significantly faster:
 
 N | py (ms) | cpp (ms) | speedup
 -:|--------:|---------:|-----------:
-100 | 0.5 | 0.2 | 174%
-300 | 6.2 | 0.3 | 2232%
-1000 | 42.3 | 0.8 | 5258%
-3000 | 332.1 | 10.3 | 3134%
-10000 | 3618.8 | 155.4 | 2229%
+100 | 0.5 | 0.2 | 125%
+300 | 4.0 | 0.2 | 1960%
+1000 | 29.9 | 1.0 | 2795%
+3000 | 232.7 | 8.0 | 2804%
+10000 | 2568.3 | 83.2 | 2988%
+
+The compiled version wins on several fronts at once, which compound:
+
+- **No redundant work.** The result is symmetric, so the C++ loop computes only the upper triangle (`j > i`) and mirrors it, roughly halving the distance calculations. The `numpy` version computes the full $N \times N$ matrix — it can't skip the lower triangle without falling back to Python-level loops that would erase its vectorisation advantage.
+- **No large temporaries.** `numpy` broadcasts `p[:, None, :] - p[None, :, :]` into an $N \times N \times D$ intermediate array, squares it, then reduces over the last axis. For $N=10000, D=3$ that's a ~2.4 GB temporary, so the computation is limited by memory bandwidth. The C++ version accumulates each squared distance in a register in a single pass, touching each input point repeatedly from cache and only ever allocating the $N \times N$ output.
+- **SIMD vectorisation.** `#pragma omp simd reduction(+:sum)` lets the compiler evaluate the inner dimension loop with vector instructions, several `double`s per instruction.
+- **Multithreading.** `#pragma omp parallel for` spreads the outer loop across all available cores (via OpenMP), so on an $n$-core machine the wall-clock time drops by up to a further factor of $n$. This is why the times are measured with `perf_counter` (wall clock) and not `process_time` — the latter would sum CPU time across every core and hide exactly this speedup.
+
+The gains grow with $N$: at $N=100$ the pybind11 call overhead dominates and the edge is modest, but by $N \geq 1000$ the memory-bandwidth and parallelism advantages take over and the compiled version is ~28–30x faster.
 
 Full code is in [examples/distance_matrix.py](./examples/distance_matrix.py).
 

@@ -66,8 +66,10 @@ if __name__ == "__main__":
     for size in [100, 300, 1000, 3000, 10000]:
         p = np.random.uniform(size=(size, 3))
 
-        # perf_counter (wall clock) rather than process_time: it has finer resolution and, unlike
-        # summed CPU time, reflects the wall-clock speedup from the OpenMP-parallel C++
+        # perf_counter (wall clock) rather than process_time: we want the elapsed time a caller
+        # actually waits. process_time sums CPU time across all cores, so the OpenMP-parallel C++
+        # is charged ~N_cores as much (e.g. ~7x wall on a 16-core box) and its real speedup would
+        # be hidden — or inverted into an apparent slowdown against single-threaded numpy.
         start = time.perf_counter()
         dist_p = calc_dist_matrix_py(p)
         elapsed_p = time.perf_counter() - start
