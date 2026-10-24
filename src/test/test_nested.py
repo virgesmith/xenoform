@@ -1,3 +1,5 @@
+import sys
+
 import pytest
 
 from xenoform import compile
@@ -17,9 +19,8 @@ def outer(x: float) -> float:
 def test_nested() -> None:
     assert outer(3.1) == 15.5
 
-    from test_nested_ext.test_nested import _outer_inner  # ty: ignore[unresolved-import]
-
-    assert _outer_inner(2.7, 3) == pytest.approx(8.1)
+    # built modules are loaded by path, not importable by name, so look it up where it was registered
+    assert sys.modules["test_nested_ext.test_nested"]._outer_inner(2.7, 3) == pytest.approx(8.1)
 
 
 class Outer:
