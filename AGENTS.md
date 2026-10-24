@@ -94,9 +94,10 @@ Key behaviours:
 - **Deferred compilation** — registration happens at decoration time; the module is generated, built
   and imported lazily on first call (and cached). Keep this in mind: an error in code generation
   surfaces at call time, a long way from the decorator.
-- **Change detection** — each generated module embeds a SHA-256 checksum of its source/config. On
-  import the checksum is compared (in a subprocess, to avoid polluting `sys.modules`) and the module
-  is rebuilt only if it has changed.
+- **Change detection** — the SHA-256 checksum of each generated module's source/config is written to a
+  per-ABI `.checksum` file beside its binary after a successful build. On first call it's compared with the
+  hash of the current source and the module is rebuilt only if it has changed. Up-to-date modules are
+  loaded by path, with no subprocesses.
 - **Type translation** — Python type annotations are recursively mapped to C++ types, and the
   required headers are `#include`d automatically.
 
@@ -124,10 +125,12 @@ Tests are in [src/test/](src/test/). Examples are in [examples/](examples/).
    - builds a `FunctionSpec` and registers it on the module's `ModuleSpec` in `_module_registry`;
    - wraps the original function so the first call triggers `_get_function` → `_get_module` →
      `_check_build_fetch_module_impl`.
-2. `cppmodule.ModuleSpec.make_source()` renders `module.cpp` from the templates, runs it through
-   `clang-format`, and returns the code plus its checksum.
-3. `_check_build_fetch_module_impl` builds the extension with `Pybind11Extension` + `build_ext`,
-   then imports it.
+2. `cppmodule.ModuleSpec.make_source()` renders `module.cpp` from the templates and returns the
+   (unformatted) code plus its checksum.
+3. `_check_build_fetch_module_impl` compares the checksum with the module's `.checksum` file. If they
+   differ (or either file is missing), it deletes the checksum file, writes `module.cpp` (formatted by
+   `clang-format`), builds the extension with `Pybind11Extension` + `build_ext` and writes the new
+   checksum. It then loads the binary by path (`_load_module`).
 
 Generated artifacts (binaries, `module.cpp`, `build.log`) are written to an `ext/` subdirectory by
 default and are git-ignored. The location is configurable via `XENOFORM_EXTMODULE_ROOT`.
@@ -169,8 +172,8 @@ must be changed together.
 
 ## Configuration (env vars, `XENOFORM_` prefix)
 
-- `XENOFORM_EXTMODULE_ROOT` — where generated modules live (default `./ext`). Avoid path characters
-  (space, hyphen) that are invalid in a Python module name.
+- `XENOFORM_EXTMODULE_ROOT` — where generated modules live (default `./ext`). Any path: modules are
+  loaded by path, so the root's name never appears in an import name.
 - `XENOFORM_DISABLE_FT` — if set, build with the GIL even on a free-threaded interpreter.
 - `XENOFORM_CPP_FORMAT` — clang-format style (default `file`, i.e. honour a `.clang-format` in the
   project root).
@@ -249,17 +252,19 @@ real C++, so they are inherently integration-level — every code path should be
   (`py::mod_gil_not_used()`) when running under free-threaded Python (`3.14t`), unless
   `XENOFORM_DISABLE_FT` is set. Changes affecting the module template or build flags must not
   regress free-threaded behaviour.
-- **The checksum is the rebuild trigger.** `ModuleSpec.make_source` hashes the *formatted* generated
-  source, and the hash is embedded in the built module as `__checksum__`. Anything that should force
+- **The checksum is the rebuild trigger.** `ModuleSpec.make_source` hashes the *unformatted* generated
+  source (so clang-format runs only on a rebuild, and its version never affects the hash), and the hash is
+  written to the module's `.checksum` file and embedded in the built module as `__checksum__` (for
+  inspection only; nothing reads it at runtime). Anything that should force
   a rebuild must therefore be visible in the generated source — compiler flags, macros and the
   free-threading flag are emitted into the header comment for exactly this reason. Conversely,
   things that should *not* force a rebuild must be kept out of it: function definitions are sorted
   for this reason, so that ordering alone never triggers one.
 - **The Python ABI deliberately does not enter the checksum.** setuptools already names both the
   binary and the build tree by `EXT_SUFFIX` (`mod.cpython-314t-x86_64-linux-gnu.so`,
-  `build/temp.linux-x86_64-cpython-314t/`), and `_get_module_checksum` reads `__checksum__` back
-  through a `sys.executable` subprocess, which can only ever import the ABI-matching binary. This
-  repo is ABI-partitioned by construction. `xenoform-rs` had to build that partitioning by hand
+  `build/temp.linux-x86_64-cpython-314t/`), and the checksum file is named after the binary
+  (`mod.cpython-314t-x86_64-linux-gnu.checksum`), so it can only vouch for the ABI-matching binary.
+  This repo is ABI-partitioned by construction. `xenoform-rs` had to build that partitioning by hand
   (`CARGO_TARGET_DIR`) and its #19/#20 are **not** to be ported here.
 - **Type annotations required.** All function signatures need full annotations. `ty` will catch
   missing or incorrect ones.
@@ -272,7 +277,8 @@ real C++, so they are inherently integration-level — every code path should be
 - Decorated stubs have an empty body, so add `# ty: ignore[empty-body]` to silence the type checker,
   and expect to disable some pydocstyle rules where the docstring contains C++.
 - Don't hand-edit anything under `ext/` — it is regenerated. To force a rebuild, change the inline
-  code or delete the module; note that edits to `#include`-d files do **not** trigger a rebuild.
+  code or delete the module's `.checksum` file (or its folder); note that edits to `#include`-d files
+  do **not** trigger a rebuild. A binary rebuilt outside xenoform keeps the old checksum.
 - Functions with conflicting compiler/linker settings (including a different `cxx_std`) must live in
   separate modules — `ModuleSpec.add_function` raises `ValueError` on a `cxx_std` mismatch.
 - Compiled Python lambdas and top-level recursion are unsupported; nested functions are supported but

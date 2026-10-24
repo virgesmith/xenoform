@@ -7,7 +7,7 @@ from itrx import Itr
 
 from xenoform import __version__ as version
 from xenoform.logger import get_logger
-from xenoform.utils import build_freethreaded, deduplicate, format_cpp, group_headers
+from xenoform.utils import build_freethreaded, deduplicate, group_headers
 
 logger = get_logger()
 
@@ -141,7 +141,7 @@ class ModuleSpec:
             function_definitions=function_defs,
         )
 
-        code = format_cpp(code)
-
-        # return code and hash
+        # hashed unformatted: formatting doesn't change what's built, and hashing formatted code would make every
+        # up-to-date check run clang-format, and every clang-format upgrade rebuild every module.
+        # The code is formatted when written
         return code, sha256(code.encode()).hexdigest()

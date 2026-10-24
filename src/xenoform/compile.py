@@ -1,8 +1,9 @@
 import importlib
+import importlib.util
 import inspect
 import os
-import subprocess
 import sys
+import sysconfig
 from collections import defaultdict
 from collections.abc import Callable
 from contextlib import redirect_stderr, redirect_stdout
@@ -20,30 +21,48 @@ from xenoform.config import get_config
 from xenoform.cppmodule import FunctionSpec, ModuleSpec, ReturnValuePolicy
 from xenoform.errors import AnnotationError, CompilationError
 from xenoform.logger import get_logger
-from xenoform.utils import deduplicate, get_function_scope, translate_function_signature
+from xenoform.utils import deduplicate, format_cpp, get_function_scope, translate_function_signature
 
 logger = get_logger()
 
 _module_registry: dict[str, ModuleSpec] = defaultdict(ModuleSpec)
 
 
-# need to load module in a subprocess to check its up-to-date to avoid polluting sys.modules
-# otherwise if a rebuild is done, the module is already loaded and the changes are not picked up
-# importlib.reload doesn't work here, the old module remains in memory
-def _get_module_checksum(module_name: str) -> str | None:
+def _get_binary_path(module_dir: Path, module_name: str) -> Path:
+    """The built extension, named by setuptools for this interpreter's ABI"""
+    return module_dir / f"{module_name}{sysconfig.get_config_var('EXT_SUFFIX')}"
+
+
+def _get_checksum_path(module_dir: Path, module_name: str) -> Path:
+    """
+    The hash of the source the binary was built from. Named after the binary, so each ABI (e.g. 3.14 and 3.14t,
+    which share the module dir and its source) has its own and can't vouch for another's binary
+    """
+    return _get_binary_path(module_dir, module_name).with_suffix(".checksum")
+
+
+def _read_checksum(module_dir: Path, module_name: str) -> str | None:
+    # reading a file rather than loading the module (which would need a subprocess, since a loaded
+    # extension module can't be unloaded or reloaded) keeps the up-to-date check cheap
     try:
-        p = subprocess.run(
-            [sys.executable, "-c", f"import {module_name} as m; print(m.__checksum__)"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except subprocess.TimeoutExpired:  # pragma: no cover
+        return _get_checksum_path(module_dir, module_name).read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
         return None
-    if p.returncode == 0:
-        return p.stdout.strip()
-    return None
+
+
+def _load_module(name: str, path: Path) -> ModuleType:
+    """Load an extension module by path, so the extmodule root needn't be on sys.path"""
+    if module := sys.modules.get(name):
+        # a loaded extension module can't be reloaded, even after a rebuild
+        return module
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:  # pragma: no cover
+        # defensive: a path with an extension module suffix always gets an ExtensionFileLoader
+        raise ImportError(f"cannot load extension module {name} from {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def _parse_macros(macro_list: list[str]) -> dict[str, str | None]:
@@ -62,25 +81,22 @@ def _check_build_fetch_module_impl(
 ) -> ModuleType:
     extmodule_root = get_config().extmodule_root
 
-    # ensure the module directory is importable (deferred to first use, with a duplicate guard)
-    root = str(extmodule_root)
-    if root not in sys.path:
-        sys.path.append(root)
-
     ext_name = module_name + "_ext"
+    qualified_name = f"{ext_name}.{module_name}"
 
     module_dir = extmodule_root / ext_name
-    module_dir.mkdir(exist_ok=True, parents=True)
+    binary_path = _get_binary_path(module_dir, module_name)
+    checksum_path = _get_checksum_path(module_dir, module_name)
 
     code, hashval = module_spec.make_source(module_name)
 
     # if a built module already exists, and matches the hash of the source code, just use it
-    module_checksum = _get_module_checksum(f"{extmodule_root.name}.{ext_name}.{module_name}")
+    module_checksum = _read_checksum(module_dir, module_name) if binary_path.exists() else None
 
     # assume exists and up-to-date
     exists, outdated = True, False
     if not module_checksum:
-        logger(f"module {extmodule_root.name}.{ext_name}.{module_name} not found")
+        logger(f"module {qualified_name} not found")
         exists = False
     elif module_checksum != hashval:
         logger(f"module is outdated ({hashval})")
@@ -89,12 +105,16 @@ def _check_build_fetch_module_impl(
         logger(f"module is up-to-date ({hashval})")
 
     if outdated or not exists:
-        logger(f"(re)building module {extmodule_root.name}.{ext_name}.{module_name}")
+        logger(f"(re)building module {qualified_name}")
 
-        # save the code with the hash embedded
+        # invalidate first, so a checksum only ever exists for a completed build
+        checksum_path.unlink(missing_ok=True)
+        module_dir.mkdir(exist_ok=True, parents=True)
+
+        # save the code with the hash embedded, formatted only now so an up-to-date check runs no subprocesses
         with (module_dir / "module.cpp").open("w") as fd:
             # can't use format as its full of { }
-            fd.write(code.replace("__HASH__", str(hashval)))
+            fd.write(format_cpp(code.replace("__HASH__", hashval)))
 
         logger(f"wrote {module_dir}/module.cpp")
 
@@ -110,7 +130,7 @@ def _check_build_fetch_module_impl(
             )
         ]
 
-        logger(f"building {extmodule_root.name}.{ext_name}.{module_name}...")
+        logger(f"building {qualified_name}...")
         cwd = Path.cwd()
         try:
             os.chdir(module_dir)
@@ -127,9 +147,9 @@ def _check_build_fetch_module_impl(
             raise CompilationError(str(e)) from e
         finally:
             os.chdir(cwd)
-        importlib.invalidate_caches()  # without this, newly built modules are not found
-        logger(f"built {extmodule_root.name}.{ext_name}.{module_name}")
-    return importlib.import_module(f"{ext_name}.{module_name}")
+        checksum_path.write_text(hashval, encoding="utf-8")
+        logger(f"built {qualified_name}")
+    return _load_module(qualified_name, binary_path)
 
 
 @lru_cache(maxsize=256)

@@ -30,8 +30,11 @@ Here's what happens automatically when you import a module with `@compile`-decor
 The C++ functions execute directly with minimal overhead.
 
 **Change detection:**
-Each module stores a hash of its source code and configuration. On import, xenoform checks these hashes and
-automatically rebuilds the module if any changes are detected.
+Each module stores a hash of its source code and configuration. On first call, xenoform compares it with the hash of
+the current source and automatically rebuilds the module if anything has changed. The hash is kept in a `.checksum`
+file next to the binary, named after the interpreter's ABI (e.g. `ext/my_module_ext/my_module.cpython-314-x86_64-linux-gnu.checksum`),
+so checking an up-to-date module only reads two files. Deleting the checksum file, or the module's folder, forces a
+rebuild.
 
 **Where files go:**
 By default, the `ext` subfolder contains binaries, generated source code, and build logs. To change this location see
@@ -82,7 +85,8 @@ class methods.
 - IDE syntax highlighting and linting probably won't work correctly for inline C or C++ code. A workaround is to have
 the inline code just call a function in a separate `.cpp` file.
 - Any changes to `#include`-d files won't automatically trigger a rebuild - to rebuild either modify the inline code or
-delete the ext module
+delete the module's `.checksum` file (or its folder under `ext`)
+- Built modules are loaded from their files, and are not importable by name (e.g. `import my_module_ext.my_module`)
 - Inline C++ code will break some pydocstyle linting rules, so these may need to be disabled. Likewise
 `ignore[empty-body]` may be required to silence type checkers.
 
@@ -109,7 +113,7 @@ kwarg | type(=default) | description
 To run the example scripts, install the "examples" extra, e.g. `pip install xenoform[examples]` or
 `uv sync --extra examples`. Links to the code can be found below.
 
-The examples preload their functions so that everything is compiled and loaded before timing starts, keeping that cost out of the per-call wall-clock times (measured with `perf_counter`). Whilst compilation time will vary widely, the one-off initialisation cost of loading the extension, checking it's up-to-date and redirecting the python stub is around 30ms.
+The examples preload their functions so that everything is compiled and loaded before timing starts, keeping that cost out of the per-call wall-clock times (measured with `perf_counter`). Whilst compilation time will vary widely, the one-off initialisation cost of checking the extension is up-to-date, loading it and redirecting the python stub is well under a millisecond.
 
 ### Loops
 
@@ -281,8 +285,8 @@ Full code is in [examples/distance_matrix.py](./examples/distance_matrix.py).
 ### Location of Extension Modules
 
 By default, compiled modules are placed in an `ext` subdirectory of your project's root. If this location is unsuitable,
-it can be overridden using the environment variable `XENOFORM_EXTMODULE_ROOT`. NB avoid using characters in paths
-(e.g. space, hyphen) that would not be valid in a python module name.
+it can be overridden using the environment variable `XENOFORM_EXTMODULE_ROOT`, which can be any path, absolute or
+relative to the working directory.
 
 ### Free-threaded Interpreter
 

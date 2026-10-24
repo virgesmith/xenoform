@@ -22,6 +22,76 @@ Entry template:
 
 ---
 
+## 2026-10-24 — Checksum file per ABI; load modules by path
+
+**Why** — To decide whether a module was up to date, `_get_module_checksum` started a Python subprocess that imported
+the module and printed `__checksum__`. It had to be a subprocess, because a loaded extension can't be unloaded or
+reloaded. That had two problems:
+- **A bug:** the subprocess imported `{extmodule_root.name}.{ext_name}.{module_name}`, which only resolves when the cwd
+  is the parent of the extmodule root, and only when the root's name is a valid module name. With an absolute
+  `XENOFORM_EXTMODULE_ROOT` elsewhere, a run from another directory, or a root such as `ext-build`, every new process
+  found nothing and rebuilt the module (reproduced: a few seconds per run instead of a load).
+- **Cost:** even when it worked, the first call per module per process paid for an interpreter start-up and a
+  clang-format run: ~27 ms measured on Linux, more on macOS/Windows.
+
+Ported from `xenoform-rs` #35 (see `PARITY_PLAN.md`, PR 2).
+
+**What**
+- After a successful build, the hash is written to a checksum file beside the binary, named after it:
+  `ext/foo_ext/foo.cpython-314t-x86_64-linux-gnu.checksum` (`_get_checksum_path`). A module is up to date when its
+  binary (`_get_binary_path`, named by `EXT_SUFFIX` as setuptools does) exists and the checksum file holds the current
+  hash. `_get_module_checksum` and its subprocess are gone.
+- A rebuild deletes the checksum file first and writes it only once the build has succeeded.
+- `make_source` hashes the *unformatted* source. clang-format runs only when `module.cpp` is written, so an up-to-date
+  check runs no subprocesses at all.
+- Modules are loaded by path (`_load_module`, via `importlib.util.spec_from_file_location`) and registered in
+  `sys.modules` as `<name>_ext.<name>`, as before. The extmodule root is no longer appended to `sys.path`.
+- The module folder is only created when building, so a check has no side effects.
+- Measured (Linux, 3.14, warm `ext/`): the first call to a compiled function went from ~27 ms to ~0.5 ms.
+- New `test_checksum.py`: a build writes the checksum and formatted source; an up-to-date check runs no subprocess and
+  no build; a stale, missing or other-ABI checksum rebuilds, and so does a checksum without its binary; a failed build
+  leaves no checksum; an absolute root used from another cwd is reused across processes (the regression).
+- README and AGENTS.md describe the checksum files. The caveat against spaces and hyphens in
+  `XENOFORM_EXTMODULE_ROOT` is removed: the root's name no longer appears in an import name. Checked on Linux with
+  `my build-dir/ext`.
+
+**Design decisions**
+- *Keeps the AGENTS.md ABI rule, with a new mechanism.* The ABI still doesn't enter the hash. Before, the subprocess
+  used `sys.executable`, so it could only import the matching binary. Now the checksum file is named after the
+  binary, so it can only vouch for that binary. A single `.checksum` per module was rejected: 3.14 and 3.14t share the
+  module folder and its source, so a switch between them would find a matching hash and load the wrong binary, or
+  none.
+- *Invalidate, build, then stamp.* If the old checksum survived a failed or interrupted rebuild, it could vouch for a
+  binary that wasn't built from the source it names. Deleting it first means a checksum only exists for a completed
+  build.
+- *No check that the binary exists after `setup()` returns.* If setuptools succeeded without producing it, the next
+  check finds no binary and rebuilds. It isn't worth an extra error path.
+- *Unformatted hash.* Formatting doesn't change what's built. Hashing formatted code would keep a clang-format
+  subprocess in every up-to-date check, and a clang-format upgrade would rebuild every module. The maintainer first
+  preferred the formatted hash, as upgrades are rare, then chose this for the subprocess-free check.
+- *No fallback to the subprocess check.* Existing `ext/` folders have no checksum files, so each module rebuilds once
+  after upgrading. That's cheaper than keeping the slow path, and its tests, around.
+- *Load by path rather than keep `sys.path`.* With the root on `sys.path`, every `<name>_ext` folder was importable as a
+  namespace package, which could shadow a real package. It also tied the import to the root's location and name. The
+  `sys.modules` key stays `<name>_ext.<name>`, so it still can't collide with the user's Python module (the bug
+  `xenoform-rs` #30 fixed doesn't arise here). pybind11 finds `PyInit_<name>` from the last part of the name, so the
+  generated code is unchanged.
+- *An already-loaded module is returned as is,* as `import_module` did, since it can't be reloaded after a rebuild.
+- *Rejected: reading the hash from the loaded module.* That needs the module loaded, which is what the subprocess
+  avoided. `__checksum__` stays in the module for inspection only.
+
+**Follow-ups**
+- Built modules are no longer importable by name (`from foo_ext.foo import _f`), since `ext/` isn't on `sys.path`.
+  `test_nested.py` did this and now uses `sys.modules`. The functions were always private (`_`-prefixed), but this is a
+  visible change.
+- A binary rebuilt outside xenoform keeps the old checksum. Delete the checksum file or the module folder to force a
+  rebuild.
+- `test_checksum.py`'s rebuild tests are skipped on Windows (a loaded `.pyd` can't be overwritten), as is the rebuild
+  step of `test_rebuild_lifecycle`. The up-to-date, build and cross-process tests run everywhere.
+- Paths with spaces were only checked on Linux.
+
+---
+
 ## 2026-10-24 — Support Python 3.13–3.15; bump CI actions and dev tooling; numpy 2.5 `NDArray`
 
 **Why** — Python 3.15 has been released, and the project supports only the three latest minor versions, so 3.15
