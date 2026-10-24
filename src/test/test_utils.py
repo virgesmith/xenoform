@@ -1,3 +1,5 @@
+import math
+
 import pytest
 
 from xenoform.utils import _translate_value, group_headers
@@ -12,6 +14,10 @@ def test_translate_value() -> None:
     # numbers use repr, which is a valid C++ literal for these cases
     assert _translate_value(5, "int") == "5"
     assert _translate_value(1.5, "double") == "1.5"
+    # ...but inf and nan aren't C++ literals
+    assert _translate_value(math.inf, "double") == "std::numeric_limits<double>::infinity()"
+    assert _translate_value(-math.inf, "float") == "-std::numeric_limits<double>::infinity()"
+    assert _translate_value(math.nan, "std::optional<double>") == "std::numeric_limits<double>::quiet_NaN()"
     # plain string is quoted
     assert _translate_value("hi", "std::string") == '"hi"'
     # double-quote and backslash are escaped

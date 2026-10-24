@@ -12,8 +12,14 @@ from xenoform.errors import CppTypeError
 DEFAULT_TYPE_MAPPING = {
     None: "void",  # py::none?
     int: "int",
+    np.int8: "int8_t",
+    np.int16: "int16_t",
     np.int32: "int32_t",
     np.int64: "int64_t",
+    np.uint8: "uint8_t",
+    np.uint16: "uint16_t",
+    np.uint32: "uint32_t",
+    np.uint64: "uint64_t",
     bool: "bool",
     float: "double",
     np.float32: "float",
@@ -91,18 +97,20 @@ class CppTypeTree:
         if not self.type and not override:
             raise CppTypeError(f"Don't know a C++ type for '{tree.type}' and no override provided")
         self.override = override
+        if override is not None:
+            # the override is the whole C++ type, so type parameters (which may have no default mapping) aren't
+            # translated. Nothing reads subtypes of an overridden type: __repr__ and headers() return early
+            self.subtypes: tuple[CppTypeTree, ...] = ()
         # special treatment for numpy arrays
-        if tree.type == np.ndarray:
-            self.subtypes: tuple[CppTypeTree, ...] = (CppTypeTree(tree.subtypes[1].subtypes[0]),)
+        elif tree.type == np.ndarray:
+            self.subtypes = (CppTypeTree(tree.subtypes[1].subtypes[0]),)
         else:
             self.subtypes = tuple(CppTypeTree(t) for t in tree.subtypes if t.type is not NoneType)
         # if we have a "T | None" -> std::variant with one fewer type param, make it a std::optional
-        if self.type == "std::variant" and len(self.subtypes) == len(tree.subtypes) - 1:
+        if override is None and self.type == "std::variant" and len(self.subtypes) == len(tree.subtypes) - 1:
             if len(self.subtypes) > 1:
                 # T | U | None -> std::optional<std::variant<T, U>>
-                subtype = copy(self)
-                subtype.override = None
-                self.subtypes = (subtype,)
+                self.subtypes = (copy(self),)
             self.type = "std::optional"
 
     def __repr__(self) -> str:

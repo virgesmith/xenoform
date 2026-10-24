@@ -1,4 +1,5 @@
 import inspect
+import math
 import platform
 import re
 import subprocess
@@ -57,6 +58,12 @@ def _translate_value(value: Any, cpptype: str) -> str:
         return "std::nullopt"
     if isinstance(value, str):
         return _cpp_string_literal(value)
+    if isinstance(value, float) and not math.isfinite(value):
+        # python's inf/nan aren't C++ literals. A python float is a double, which converts to any other
+        # floating-point (or optional) parameter type
+        if math.isnan(value):
+            return "std::numeric_limits<double>::quiet_NaN()"
+        return f"{'-' if value < 0 else ''}std::numeric_limits<double>::infinity()"
     if isinstance(value, (int, float)):
         return repr(value)
     if isinstance(value, (tuple, list, set, dict)):
@@ -116,6 +123,8 @@ def translate_function_signature(func: Callable[..., Any]) -> tuple[str, list[st
             arg_annotation = f'py::arg("{var_name}")'
             if var_name in defaults:
                 translated = _translate_value(defaults[var_name], f"{cpptype}")
+                if isinstance(defaults[var_name], float) and not math.isfinite(defaults[var_name]):
+                    headers.append("<limits>")
                 arg_def += f"={translated}"
                 arg_annotation += f"={translated}"
             arg_defs.append(arg_def)
