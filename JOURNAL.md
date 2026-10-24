@@ -22,6 +22,62 @@ Entry template:
 
 ---
 
+## 2026-10-24 — Support Python 3.13–3.15; bump CI actions and dev tooling; numpy 2.5 `NDArray`
+
+**Why** — Python 3.15 has been released, and the project supports only the three latest minor versions, so 3.15
+comes in and 3.12 goes out. The CI actions and pre-commit tools were behind `xenoform-rs`. Refreshing the lock then
+pulled in numpy 2.5, which breaks the default `npt.NDArray[...]` mapping. Ported from `xenoform-rs` #28 and its
+0.1.6 release prep (see `PARITY_PLAN.md`, PR 1).
+
+**What**
+- `requires-python = ">=3.13"`; classifiers and CI matrix are 3.13, 3.14, 3.14t, 3.15.
+- `actions/checkout` v6 → v7, `astral-sh/setup-uv` v7/v8.1.0 → v10.3.0 in both workflows.
+- Pre-commit: uv 0.13.5, ruff v0.17.2, ty v0.0.91. The dev dependency floors (`ruff>=0.17.2`, `ty>=0.0.91`) match
+  the hooks, so the hook and CI's `uv run ty check` use the same versions. Relocked: numpy 2.4.5 → 2.5.4, pybind11
+  3.1.0.
+- New `all-checks` CI job: the single required status check.
+- `compile.py` uses PEP 695 type parameters throughout. The module-level `P = ParamSpec("P")` / `R = TypeVar("R")`
+  are gone.
+- Removed the 3.12-only `sys._is_gil_enabled` guard in `build_freethreaded` and its `# pragma: no cover`.
+- `npt.NDArray` is a `DEFAULT_TYPE_MAPPING` key alongside `np.ndarray`, with tests for both annotation styles.
+- AGENTS.md states the three-version policy and the `all-checks` required check.
+- ruff 0.17 formats Python code blocks in Markdown, which changed blank lines in the README and AGENTS.md and
+  collapsed one `...` body onto its `def` line.
+- New ty diagnostics fixed: `examples/loop.py` iterates with `enumerate(data)` instead of `data.items()`, and the two
+  `translate_type(npt.NDArray[...])` calls in `test_types.py` also ignore `invalid-argument-type`.
+
+**Design decisions**
+- *Why `NDArray` broke* — numpy 2.5 redefines `NDArray` as a PEP 695 alias (`type NDArray[ScalarT] = ...`).
+  `get_origin(NDArray[T])` is then the alias object, not `np.ndarray`, so the `np.ndarray` key no longer matched and
+  translation raised `CppTypeError`. Users already on numpy 2.5 were hitting this before the lock moved.
+- *Both keys, not `numpy>=2.5`.* Raising the floor drops users, and `np.ndarray` is still needed for numpy < 2.5's
+  `NDArray` and for explicit `np.ndarray[shape, dtype[T]]` annotations on every version. The two keys reach
+  `py::array_t<T>` by different routes: `np.ndarray[...]` takes the special case that digs `T` out of the dtype,
+  and the one-parameter alias `NDArray[T]` takes the generic branch.
+- *Not generic PEP 695 alias expansion* (substituting the arguments into the alias's `__value__`). It would also
+  support user-defined `type X = ...` aliases, but it touches the core translation path, so it's kept for later.
+- *`enumerate(data)` in `loop.py`, not a `# ty: ignore`.* The loop writes into a numpy array by position, so a
+  positional index is what the code means. `data.items()` only worked because the example's index is a
+  `RangeIndex`. The benchmark loop is otherwise unchanged.
+- *A single `all-checks` required check*, as in `xenoform-rs`. A ruleset that lists matrix jobs by name needs editing
+  on every version bump, and jobs removed from the matrix block the PR as "expected" checks that never report. The
+  job runs with `if: always()`, because GitHub counts a skipped required check as passing.
+- *setup-uv is pinned to an exact version.* From v8, setup-uv no longer publishes major/minor tags (a supply-chain
+  guard), so `@v10` doesn't exist. checkout still publishes `@v7`. None of the actions' breaking changes apply: the
+  workflows trigger only on `push`, `pull_request` and tags, and pass only `python-version` to setup-uv.
+- *No 3.15t in CI* — free-threading stays covered by 3.14t, which keeps the matrix size unchanged.
+- pybind11 3.1.0 works on 3.15: the full suite passed locally on 3.14 (100% coverage from a clean `ext/`), 3.14t and
+  3.15 (Linux).
+
+**Follow-ups**
+- **Maintainer action:** change the `main` ruleset to require only `all-checks`. If it currently lists matrix jobs
+  by name, any 3.12 jobs among them will never report and will block this PR.
+- The numpy < 2.5 path is no longer exercised in CI (only the locked numpy is). A lowest-direct-deps job would cover
+  it.
+- Generic PEP 695 alias expansion (see above).
+
+---
+
 ## 2026-07-18 — Preload compiled functions before benchmarking in examples
 
 **Why** — The README claimed the smallest-array `cpp` timing was dominated by "compiling and

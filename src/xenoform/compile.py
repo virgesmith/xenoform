@@ -9,7 +9,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from functools import cache, lru_cache, wraps
 from pathlib import Path
 from types import ModuleType
-from typing import ParamSpec, TypeVar, cast
+from typing import cast
 
 import numpy as np
 from itrx import Itr
@@ -139,10 +139,6 @@ def _get_module(module_name: str) -> ModuleType:
     return module
 
 
-P = ParamSpec("P")
-R = TypeVar("R")
-
-
 def _check_annotations[**P, R](func: Callable[P, R]) -> None:
     """Ensures all args and return are typed"""
     sig = inspect.signature(func)
@@ -158,13 +154,13 @@ def _check_annotations[**P, R](func: Callable[P, R]) -> None:
 
 
 @lru_cache  # limited function cache
-def _get_function(module_name: str, function_name: str) -> Callable[P, R]:
+def _get_function[**P, R](module_name: str, function_name: str) -> Callable[P, R]:
     module = _get_module(module_name)
     logger(f"redirected {module_name}.{function_name[1:]} to compiled function {module.__name__}.{function_name}")
     return getattr(module, function_name)
 
 
-def compile(
+def compile[**P, R](
     *,
     vectorise: bool = False,
     define_macros: list[str] | None = None,
@@ -196,7 +192,7 @@ def compile(
     variable (any value enables it), not per-decorator.
     """
 
-    def register_function(func: Callable[P, R]) -> Callable[P, R]:
+    def register_function[**P, R](func: Callable[P, R]) -> Callable[P, R]:
         """This registers the function, actual compilation is deferred"""
         extmodule_root = get_config().extmodule_root
 

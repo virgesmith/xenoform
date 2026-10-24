@@ -12,6 +12,7 @@ implementation** in a docstr:
 ```py
 import xenoform
 
+
 @xenoform.compile(vectorise=True)
 def max(i: int, j: int) -> int:  # ty: ignore[empty-body]
     "return i > j ? i : j;"
@@ -347,9 +348,9 @@ mapping. Some examples:
 
     from xenoform import compile
 
+
     @compile()
-    def fibonacci(n: Annotated[int, "uint64_t"]) -> Annotated[int, "uint64_t"]:
-        ...
+    def fibonacci(n: Annotated[int, "uint64_t"]) -> Annotated[int, "uint64_t"]: ...
     ```
 
 - there is no explicit C++ type, e.g. `pd.Series`. This example is covered in the performance section [above](#loops).
@@ -375,6 +376,7 @@ also be provided:
     ```py
     from other_ext import ExtObj
 
+
     @compile(extra_include_paths=["path_to_other_ext_include"], extra_includes=['"extobj.h"'])
     def mutate_ext_object(obj: Annotated[ExtObj, "ExtObj&"], n: int) -> None:
         """
@@ -389,6 +391,7 @@ e.g. for exposing STL containers directly to python. This must be registered in 
 
     ```py
     from other_ext import UIntVector
+
 
     @compile(extra_includes=["<pybind11/stl.h>"])
     def mutate_uint_vector_ptr(vec: Annotated[UIntVector, "std::vector<uint64_t>*"], n: int) -> None:
