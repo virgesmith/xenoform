@@ -305,8 +305,8 @@ Python | C++
 -------|----
 `None` | `void`
 `int` | `int`
-`np.int32` | `int32_t`
-`np.int64` | `int64_t`
+`np.int8` / `np.int16` / `np.int32` / `np.int64` | `int8_t` / `int16_t` / `int32_t` / `int64_t`
+`np.uint8` / `np.uint16` / `np.uint32` / `np.uint64` | `uint8_t` / `uint16_t` / `uint32_t` / `uint64_t`
 `bool` | `bool`
 `float` | `double`
 `np.float32` | `float`
@@ -359,6 +359,8 @@ mapping. Some examples:
     ```
 
 - there is no explicit C++ type, e.g. `pd.Series`. This example is covered in the performance section [above](#loops).
+The override replaces the whole type, so its type parameters needn't have a mapping either, e.g.
+`Annotated[npt.NDArray[np.datetime64], "py::array"]`.
 
 - a different mapping to the default is required - e.g. for in-place modification of a list:
 

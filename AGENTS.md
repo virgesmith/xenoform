@@ -143,7 +143,8 @@ Defaults (override per-arg with `typing.Annotated[T, "cpp_type"]`):
 |--------|-----|
 | `None` | `void` |
 | `int` | `int` |
-| `np.int32` / `np.int64` | `int32_t` / `int64_t` |
+| `np.int8` … `np.int64` | `int8_t` … `int64_t` |
+| `np.uint8` … `np.uint64` | `uint8_t` … `uint64_t` |
 | `bool` | `bool` |
 | `float`, `np.float64` | `double` |
 | `np.float32` | `float` |

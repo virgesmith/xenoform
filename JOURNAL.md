@@ -22,6 +22,57 @@ Entry template:
 
 ---
 
+## 2026-10-24 — Small type-translation fixes: overrides, numpy int widths, non-finite defaults
+
+**Why** — Three small gaps found while comparing with `xenoform-rs` (see `PARITY_PLAN.md`, PR 3):
+- **Overrides still translated their type parameters** (rs #38). `CppTypeTree.__init__` recursed into the Python
+  type's parameters even when an `Annotated` override replaced the whole type. Any parameter without a default
+  mapping raised, e.g. `Annotated[npt.NDArray[np.datetime64], "py::array"]` failed on `np.datetime64`, although the
+  override never reads it. A top-level unmapped type (`Annotated[X, "..."]`) was already fine, so nesting changed the
+  behaviour of the escape hatch.
+- **Missing numpy int widths** (rs 2026-10-12). Only `np.int32`/`np.int64` had mappings. `np.int8`, `np.int16` and
+  every unsigned width needed an override.
+- **Non-finite defaults gave invalid C++** (rs #31). `_translate_value` rendered floats with `repr()`, so
+  `x: float = math.inf` emitted `inf`, which isn't a C++ literal, and the build failed on first call.
+
+**What**
+- An overridden `CppTypeTree` has no subtypes, and the `T | None` → `std::optional` rewrite skips overridden types.
+  The `subtype.override = None` line in that rewrite only existed to strip an override that can no longer reach it,
+  so it's gone.
+- `np.int8`/`np.int16` → `int8_t`/`int16_t` and `np.uint8`…`np.uint64` → `uint8_t`…`uint64_t`. README and AGENTS.md
+  type tables updated.
+- `inf`, `-inf` and `nan` defaults are rendered as `std::numeric_limits<double>::infinity()` (negated for `-inf`) and
+  `std::numeric_limits<double>::quiet_NaN()`, and `<limits>` is added to the module's headers when one is used.
+- Tests:
+  - `test_types.py`: overrides over unmapped type parameters, including a numpy dtype and an optional union; that an
+    unmapped parameter without an override still raises; the int widths, bare and as array dtypes.
+  - `test_utils.py`: the non-finite values.
+  - New `test_int_widths.py`: compiled round-trips that overflow each width by one, so the C++ type is shown to have
+    that width and signedness, and that pybind11 rejects out-of-range input.
+  - New `test_non_finite_defaults.py`: compiled functions with `±inf`/`nan` defaults on `double`, `float` and
+    `std::optional<double>` parameters, and the `<limits>` header.
+- The override test was checked against `main`'s `extension_types.py`, where it fails with `CppTypeError`.
+
+**Design decisions**
+- *Fix the escape hatch rather than map `np.datetime64`.* A mapping would fix one type, not the cause, and AGENTS.md
+  says not to special-case types when an override should work. It's safe because nothing reads an overridden type's
+  subtypes: `__repr__` and `headers()` both return early on an override.
+- *Non-finite defaults are always `double`*, not the parameter's C++ type as `PARITY_PLAN.md` first proposed. The
+  parameter type can be `std::optional<double>` or an arbitrary override, which `std::numeric_limits` can't take, and
+  a Python float is a double anyway. It converts implicitly to `float` or `std::optional<double>`, which the compiled
+  tests check.
+- *`<limits>` is included explicitly* when needed, rather than relying on pybind11 to include it transitively, so the
+  header follows the value (AGENTS.md: headers must follow the type).
+- *No header requirement for the fixed-width ints*, as for the existing `int32_t`/`int64_t`, which have always relied
+  on pybind11 including `<cstdint>` and compile across the CI matrix, MSVC included. A `<cstdint>` entry for every
+  width would add an include to almost every module for no benefit.
+- *numpy scalar defaults are still unsupported.* `np.float32(math.inf)` isn't a `float` and raises `TypeError` at
+  decoration, as before. A C++ `float` parameter with a non-finite default is written `Annotated[float, "float"]`.
+
+**Follow-ups** — none.
+
+---
+
 ## 2026-10-24 — `module_name` override for `@compile`
 
 **Why** — A function's module was always the stem of its defining file, with no way to change it. So functions from

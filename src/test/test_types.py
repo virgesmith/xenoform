@@ -164,6 +164,45 @@ def test_overridden_annotated_types() -> None:
     assert str(cpptype) == "py::list"
 
 
+def test_override_skips_unmapped_type_parameters() -> None:
+    # the override is the whole C++ type, so type parameters with no default mapping mustn't raise
+    class Unmapped: ...
+
+    cpptype = translate_type(Annotated[list[Unmapped], "std::vector<Foo>"])  # ty: ignore[invalid-argument-type]
+    assert str(cpptype) == "std::vector<Foo>"
+    assert cpptype.headers(HEADER_REQUIREMENTS) == []
+
+    # ...including the dtype of a numpy array, which otherwise takes a special path
+    cpptype = translate_type(Annotated[npt.NDArray[np.datetime64], "py::array"])  # ty: ignore[invalid-argument-type]
+    assert str(cpptype) == "py::array"
+
+    # and an overridden T | U | None isn't turned into a std::optional
+    cpptype = translate_type(Annotated[int | str | None, "py::object"])  # ty: ignore[invalid-argument-type]
+    assert str(cpptype) == "py::object"
+
+    # without an override, an unmapped type parameter is still an error
+    with pytest.raises(CppTypeError):
+        translate_type(list[Unmapped])
+
+
+@pytest.mark.parametrize(
+    ("pytype", "cpptype"),
+    [
+        (np.int8, "int8_t"),
+        (np.int16, "int16_t"),
+        (np.int32, "int32_t"),
+        (np.int64, "int64_t"),
+        (np.uint8, "uint8_t"),
+        (np.uint16, "uint16_t"),
+        (np.uint32, "uint32_t"),
+        (np.uint64, "uint64_t"),
+    ],
+)
+def test_numpy_int_widths(pytype: type, cpptype: str) -> None:
+    assert str(translate_type(pytype)) == cpptype
+    assert str(translate_type(npt.NDArray[pytype])) == f"py::array_t<{cpptype}>"  # ty: ignore[invalid-argument-type, invalid-type-form]
+
+
 @compile(extra_includes=["<functional>"])
 def fibonacci(n: Annotated[int, "uint64_t"]) -> Annotated[int, "uint64_t"]:  # ty: ignore[empty-body]
     """
