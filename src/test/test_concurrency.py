@@ -88,7 +88,15 @@ def test_threads_building_the_same_module(logs: MagicMock) -> None:
 
 def test_recheck_under_the_lock(ext_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # stale when first checked, current once the lock is held: someone else built it while we waited
-    monkeypatch.setattr(compile_module, "_is_current", MagicMock(side_effect=[False, True]))
+    lock_file = ext_root / "concurrency_recheck_ext" / ".build.lock"
+    lock_held_at_check: list[bool] = []
+
+    def is_current(*_: object) -> bool:
+        # checked during the call: on Windows filelock deletes the file on release
+        lock_held_at_check.append(lock_file.exists())
+        return len(lock_held_at_check) > 1
+
+    monkeypatch.setattr(compile_module, "_is_current", is_current)
     build = MagicMock()
     monkeypatch.setattr(compile_module, "_build", build)
     monkeypatch.setattr(compile_module, "_load_module", MagicMock())
@@ -96,7 +104,7 @@ def test_recheck_under_the_lock(ext_root: Path, monkeypatch: pytest.MonkeyPatch)
     compile_module._check_build_fetch_module_impl("concurrency_recheck", _spec("[]() { return 42; }"))
 
     build.assert_not_called()
-    assert (ext_root / "concurrency_recheck_ext" / ".build.lock").exists()
+    assert lock_held_at_check == [False, True]
 
 
 def test_up_to_date_path_takes_no_lock(ext_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
