@@ -106,6 +106,7 @@ kwarg | type(=default) | description
 `cxx_std` | `int=20` | C++ standard to compile against
 `return_value_policy` | `ReturnValuePolicy=ReturnValuePolicy.Automatic` | [Return value policy](https://pybind11.readthedocs.io/en/stable/advanced/functions.html#return-value-policies)
 `help` | `str \| None=None` | Docstring for the function
+`module_name` | `str \| None=None` | Extension module to build the function into, by default the stem of the file defining it. Must be an ASCII identifier. Functions from several files with the same `module_name` are built into one module, so must have compatible settings and distinct names. In notebooks, set it explicitly: the default comes from the kernel's temporary file for the cell, so isn't deterministic
 
 
 ## Performance
