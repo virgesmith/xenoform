@@ -5,6 +5,7 @@ import keyword
 import os
 import sys
 import sysconfig
+import threading
 from collections import defaultdict
 from collections.abc import Callable
 from contextlib import redirect_stderr, redirect_stdout
@@ -14,6 +15,7 @@ from types import ModuleType
 from typing import Any, cast
 
 import numpy as np
+from filelock import FileLock
 from itrx import Itr
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 from setuptools import setup
@@ -27,6 +29,8 @@ from xenoform.utils import deduplicate, format_cpp, get_function_scope, translat
 logger = get_logger()
 
 _module_registry: dict[str, ModuleSpec] = defaultdict(ModuleSpec)
+
+_load_lock = threading.Lock()
 
 
 def _get_binary_path(module_dir: Path, module_name: str) -> Path:
@@ -53,17 +57,20 @@ def _read_checksum(module_dir: Path, module_name: str) -> str | None:
 
 def _load_module(name: str, path: Path) -> ModuleType:
     """Load an extension module by path, so the extmodule root needn't be on sys.path"""
-    if module := sys.modules.get(name):
-        # a loaded extension module can't be reloaded, even after a rebuild
+    # bypassing the import system also bypasses its per-module locks, so without this two free-threaded threads
+    # could both miss in sys.modules and both load the extension
+    with _load_lock:
+        if module := sys.modules.get(name):
+            # a loaded extension module can't be reloaded, even after a rebuild
+            return module
+        spec = importlib.util.spec_from_file_location(name, path)
+        if spec is None or spec.loader is None:  # pragma: no cover
+            # defensive: a path with an extension module suffix always gets an ExtensionFileLoader
+            raise ImportError(f"cannot load extension module {name} from {path}")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        spec.loader.exec_module(module)
         return module
-    spec = importlib.util.spec_from_file_location(name, path)
-    if spec is None or spec.loader is None:  # pragma: no cover
-        # defensive: a path with an extension module suffix always gets an ExtensionFileLoader
-        raise ImportError(f"cannot load extension module {name} from {path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
 
 
 def _parse_macros(macro_list: list[str]) -> dict[str, str | None]:
@@ -76,81 +83,88 @@ def _parse_macros(macro_list: list[str]) -> dict[str, str | None]:
     )
 
 
+def _is_current(module_dir: Path, module_name: str, hashval: str) -> bool:
+    """A built module exists and its checksum matches the hash of the source"""
+    module_checksum = (
+        _read_checksum(module_dir, module_name) if _get_binary_path(module_dir, module_name).exists() else None
+    )
+    if not module_checksum:
+        logger(f"module {module_name}_ext.{module_name} not found")
+        return False
+    if module_checksum != hashval:
+        logger(f"module is outdated ({hashval})")
+        return False
+    logger(f"module is up-to-date ({hashval})")
+    return True
+
+
+def _build(module_dir: Path, module_name: str, module_spec: ModuleSpec, code: str, hashval: str) -> None:
+    ext_name = module_name + "_ext"
+    qualified_name = f"{ext_name}.{module_name}"
+    logger(f"(re)building module {qualified_name}")
+
+    # invalidate first, so a checksum only ever exists for a completed build
+    checksum_path = _get_checksum_path(module_dir, module_name)
+    checksum_path.unlink(missing_ok=True)
+
+    # save the code with the hash embedded, formatted only now so an up-to-date check runs no subprocesses
+    with (module_dir / "module.cpp").open("w") as fd:
+        # can't use format as its full of { }
+        fd.write(format_cpp(code.replace("__HASH__", hashval)))
+
+    logger(f"wrote {module_dir}/module.cpp")
+
+    ext_modules = [
+        Pybind11Extension(
+            module_name,
+            ["module.cpp"],
+            define_macros=list(_parse_macros(deduplicate(module_spec.define_macros)).items()),
+            extra_compile_args=deduplicate(module_spec.extra_compile_args),
+            extra_link_args=deduplicate(module_spec.extra_link_args),
+            include_dirs=[np.get_include(), *deduplicate(module_spec.include_paths)],
+            cxx_std=module_spec.cxx_std,
+        )
+    ]
+
+    logger(f"building {qualified_name}...")
+    cwd = Path.cwd()
+    try:
+        os.chdir(module_dir)
+        # Redirect stdout to a log file (does not work in pytest)
+        # Redirecting stderr doesnt work at all
+        with Path("./build.log").open("w") as fd, redirect_stdout(fd), redirect_stderr(fd):
+            setup(
+                name=ext_name,
+                ext_modules=ext_modules,
+                script_args=["build_ext", "--inplace"],
+                cmdclass={"build_ext": build_ext},
+            )
+    except SystemExit as e:
+        raise CompilationError(str(e)) from e
+    finally:
+        os.chdir(cwd)
+    checksum_path.write_text(hashval, encoding="utf-8")
+    logger(f"built {qualified_name}")
+
+
 def _check_build_fetch_module_impl(
     module_name: str,
     module_spec: ModuleSpec,
 ) -> ModuleType:
-    extmodule_root = get_config().extmodule_root
-
-    ext_name = module_name + "_ext"
-    qualified_name = f"{ext_name}.{module_name}"
-
-    module_dir = extmodule_root / ext_name
-    binary_path = _get_binary_path(module_dir, module_name)
-    checksum_path = _get_checksum_path(module_dir, module_name)
+    module_dir = get_config().extmodule_root / f"{module_name}_ext"
 
     code, hashval = module_spec.make_source(module_name)
 
-    # if a built module already exists, and matches the hash of the source code, just use it
-    module_checksum = _read_checksum(module_dir, module_name) if binary_path.exists() else None
-
-    # assume exists and up-to-date
-    exists, outdated = True, False
-    if not module_checksum:
-        logger(f"module {qualified_name} not found")
-        exists = False
-    elif module_checksum != hashval:
-        logger(f"module is outdated ({hashval})")
-        outdated = True
-    else:
-        logger(f"module is up-to-date ({hashval})")
-
-    if outdated or not exists:
-        logger(f"(re)building module {qualified_name}")
-
-        # invalidate first, so a checksum only ever exists for a completed build
-        checksum_path.unlink(missing_ok=True)
+    # the up-to-date path takes no lock, so it creates no files. A torn checksum read while another process writes it
+    # can't match a full hash, so the worst case is taking the lock below and checking again
+    if not _is_current(module_dir, module_name, hashval):
         module_dir.mkdir(exist_ok=True, parents=True)
-
-        # save the code with the hash embedded, formatted only now so an up-to-date check runs no subprocesses
-        with (module_dir / "module.cpp").open("w") as fd:
-            # can't use format as its full of { }
-            fd.write(format_cpp(code.replace("__HASH__", hashval)))
-
-        logger(f"wrote {module_dir}/module.cpp")
-
-        ext_modules = [
-            Pybind11Extension(
-                module_name,
-                ["module.cpp"],
-                define_macros=list(_parse_macros(deduplicate(module_spec.define_macros)).items()),
-                extra_compile_args=deduplicate(module_spec.extra_compile_args),
-                extra_link_args=deduplicate(module_spec.extra_link_args),
-                include_dirs=[np.get_include(), *deduplicate(module_spec.include_paths)],
-                cxx_std=module_spec.cxx_std,
-            )
-        ]
-
-        logger(f"building {qualified_name}...")
-        cwd = Path.cwd()
-        try:
-            os.chdir(module_dir)
-            # Redirect stdout to a log file (does not work in pytest)
-            # Redirecting stderr doesnt work at all
-            with Path("./build.log").open("w") as fd, redirect_stdout(fd), redirect_stderr(fd):
-                setup(
-                    name=ext_name,
-                    ext_modules=ext_modules,
-                    script_args=["build_ext", "--inplace"],
-                    cmdclass={"build_ext": build_ext},
-                )
-        except SystemExit as e:
-            raise CompilationError(str(e)) from e
-        finally:
-            os.chdir(cwd)
-        checksum_path.write_text(hashval, encoding="utf-8")
-        logger(f"built {qualified_name}")
-    return _load_module(qualified_name, binary_path)
+        # filelock is thread-local by default, so this serialises threads as well as processes
+        with FileLock(module_dir / ".build.lock"):
+            # whoever held the lock may just have built this same source
+            if not _is_current(module_dir, module_name, hashval):
+                _build(module_dir, module_name, module_spec, code, hashval)
+    return _load_module(f"{module_name}_ext.{module_name}", _get_binary_path(module_dir, module_name))
 
 
 @lru_cache(maxsize=256)
