@@ -1,9 +1,10 @@
 import importlib
-import shutil
-import sys
+from pathlib import Path
 from unittest.mock import MagicMock
 
-from xenoform.config import get_config
+import pytest
+
+from xenoform.config import XenoformConfig
 from xenoform.cppmodule import FunctionSpec, ModuleSpec, ReturnValuePolicy
 from xenoform.logger import Logger
 
@@ -59,42 +60,30 @@ def _spec(body: str) -> ModuleSpec:
     return spec
 
 
-def test_rebuild_lifecycle(monkeypatch) -> None:
-    # Drives the not-found -> up-to-date -> outdated branches of _check_build_fetch_module_impl
-    # directly (they sit behind the @cache on _get_module, so a normal @compile call only ever
-    # exercises one of them per process). Uses a dedicated module name and a clean ext dir so the
-    # sequence is deterministic regardless of any pre-existing build artifacts.
-    mock_logger = MagicMock(spec=Logger)
-    monkeypatch.setattr(compile_module, "logger", mock_logger)
+def test_rebuild_lifecycle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Drives the not-found -> up-to-date -> outdated decisions of _check_build_fetch_module_impl directly (they sit
+    # behind the cache on _get_module, so a normal @compile call only ever takes one of them per process). _build is
+    # faked to leave the files a real build would, so no compiler runs: the real thing is tested in test_checksum.py
+    monkeypatch.setattr(compile_module, "get_config", lambda: XenoformConfig(extmodule_root=tmp_path))
+    monkeypatch.setattr(compile_module, "_load_module", MagicMock())
+    built: list[str] = []
 
-    module_name = "caching_lifecycle"
-    ext_dir = get_config().extmodule_root / f"{module_name}_ext"
-    shutil.rmtree(ext_dir, ignore_errors=True)
+    def fake_build(module_dir: Path, module_name: str, _spec: ModuleSpec, _code: str, hashval: str) -> None:
+        built.append(hashval)
+        compile_module._get_binary_path(module_dir, module_name).touch()
+        compile_module._get_checksum_path(module_dir, module_name).write_text(hashval)
 
-    def logs() -> list[str]:
-        return [call.args[0] for call in mock_logger.call_args_list]
+    monkeypatch.setattr(compile_module, "_build", fake_build)
 
-    # 1. nothing built yet -> "not found" -> build
-    module = compile_module._check_build_fetch_module_impl(module_name, _spec("[]() { return 42; }"))
-    assert module._answer() == 42
-    assert any("not found" in log for log in logs())
-    assert any("(re)building" in log for log in logs())
+    # 1. nothing built yet -> build
+    compile_module._check_build_fetch_module_impl("lifecycle", _spec("[]() { return 42; }"))
+    assert len(built) == 1
 
-    # 2. same source -> checksum matches -> "up-to-date", no rebuild
-    mock_logger.reset_mock()
-    compile_module._check_build_fetch_module_impl(module_name, _spec("[]() { return 42; }"))
-    assert any("up-to-date" in log for log in logs())
-    assert not any("(re)building" in log for log in logs())
+    # 2. same source -> checksum matches -> no rebuild
+    compile_module._check_build_fetch_module_impl("lifecycle", _spec("[]() { return 42; }"))
+    assert len(built) == 1
 
-    # 3. changed source -> checksum differs -> "outdated" -> rebuild
-    # (the in-process module object is not reloaded by design, so we assert on the logs, not the value)
-    # Skipped on Windows: the .pyd imported in step 1 is locked while loaded, so rebuilding it
-    # in-process fails with PermissionError. Coverage is measured on ubuntu-latest, so the "outdated"
-    # branch is still exercised by the gate.
-    if sys.platform != "win32":
-        mock_logger.reset_mock()
-        compile_module._check_build_fetch_module_impl(module_name, _spec("[]() { return 43; }"))
-        assert any("outdated" in log for log in logs())
-        assert any("(re)building" in log for log in logs())
-
-    shutil.rmtree(ext_dir, ignore_errors=True)
+    # 3. changed source -> checksum differs -> rebuild
+    compile_module._check_build_fetch_module_impl("lifecycle", _spec("[]() { return 43; }"))
+    assert len(built) == 2
+    assert built[0] != built[1]

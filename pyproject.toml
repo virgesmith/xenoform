@@ -17,6 +17,7 @@ classifiers = [
 ]
 dependencies = [
     "clang-format>=21.1.8",
+    "filelock>=3.20.0",
     "itrx>=0.2.1",
     "numpy>=2.3.2",
     "pybind11>=3.0.0",
