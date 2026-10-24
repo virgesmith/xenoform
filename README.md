@@ -37,7 +37,7 @@ so checking an up-to-date module only reads two files. Deleting the checksum fil
 rebuild.
 
 **Where files go:**
-By default, the `ext` subfolder contains binaries, generated source code, and build logs. To change this location see
+By default, the `ext` subfolder contains binaries, generated source code and build scripts, and build logs. To change this location see
 [below](#location-of-extension-modules).
 
 
@@ -440,9 +440,18 @@ See `clang-format` documentation for more info.
 
 ## Troubleshooting
 
-The generated module source code is written to `module.cpp` in a specific folder (e.g. `ext/my_module_ext`). Compiler
-commands are redirected to `build.log` in the that folder. NB: build errors refuse to be redirected to a file, and
-`build.log` is not produced when running via pytest, due to the way it captures output streams.
+The generated module source code is written to `module.cpp` in a specific folder (e.g. `ext/my_module_ext`), along
+with the `setup.py` that builds it. The build runs in a separate process, using the same interpreter, and its full
+output, including any compiler errors, goes to `build.log` in that folder. If the build fails, the `CompilationError`
+contains the last lines of the log. To rerun a build by hand, run `python setup.py build_ext --inplace` in that folder.
+
+Because the build runs `sys.executable`, xenoform can't build modules in an embedded interpreter whose `sys.executable`
+isn't Python.
+
+Modules can be built concurrently, by several processes (e.g. pytest-xdist or multiprocessing) or threads: a lock file in
+each module's folder makes sure a module is built only once. Threads building different modules don't wait for each
+other. On Linux and macOS the (empty) `.build.lock` file stays after the build: deleting a lock file on release would
+let two processes hold the lock at once.
 
 If xenoform detects an environment variable `XENOFORM_VERBOSE` (any value, including empty), debug logging of the steps
 taken is enabled, with timings, e.g.:

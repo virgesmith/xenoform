@@ -22,6 +22,78 @@ Entry template:
 
 ---
 
+## 2026-10-24 — Safe concurrent builds: a file lock per module, and the build in a subprocess
+
+**Why** — PRs 4 and 5 of the parity plan, re-cut by concern. This is the "build mechanics" half: PR B (parsing
+compiler diagnostics) and PR C (`CppWarning`) build on it. Three problems:
+- **Concurrent builds of one module, across processes** (pytest-xdist, multiprocessing). Both wrote `module.cpp` and
+  ran setuptools in the same folder, so one process could write a checksum for a binary the other built.
+- **Concurrent builds within one process.** The build did `os.chdir(module_dir)` and `redirect_stdout`/`redirect_stderr`,
+  which are process-wide. Reproduced on `main`: four threads building *different* modules failed with
+  `ld: cannot find build/temp…/module.o`, as each thread's chdir moved the others' working directory mid-build. The GIL
+  doesn't prevent it, as it's released while the compiler runs. A build also moved the cwd of user threads that had
+  nothing to do with it.
+- **No compiler errors anywhere.** The compiler writes to the stderr *fd*, which `redirect_stderr` doesn't touch, so a
+  failure raised only `command 'g++' failed with exit code 1`. Under pytest `build.log` was empty too: setuptools writes
+  through `logging`, whose handlers pytest had replaced.
+
+**What**
+- `_check_build_fetch_module_impl` checks `_is_current` without a lock. If the module is stale, it takes
+  `FileLock(<module_dir>/.build.lock)`, checks again, and calls `_build` only if it's still stale.
+- `_build` writes `module.cpp` and a generated `setup.py`, then runs `sys.executable -P setup.py build_ext --inplace`
+  with the module folder as cwd, stdout and stderr both going to `build.log`. On failure, `CompilationError` contains
+  the last 30 lines of the log and its path.
+- `_load_module` holds a `threading.Lock` around its `sys.modules` check and the load.
+- New runtime dependency `filelock`.
+
+**Design decisions**
+- *`filelock`, a new runtime dependency.* It's pure Python with no dependencies, handles POSIX and Windows, and is
+  thread-local by default, so free-threaded threads each take their own OS lock and block each other. The alternative
+  is our own `fcntl`/`msvcrt` code plus separate thread handling (`msvcrt.locking` gives up after ~10 s, so it would
+  also need a wait loop). Same reasoning as xenoform-rs #40.
+- *One lock per module, in its folder.* That also covers 3.14 and 3.14t building the same module, which share the
+  folder and its `module.cpp`/`setup.py`. Rejected: a single global lock, which would serialise unrelated modules.
+- *The up-to-date path takes no lock*, so loading a current module has no side effects. A torn checksum read can't match
+  a full hash, so the worst case is taking the lock and checking again.
+- *No timeout on the wait.* The OS releases the lock if its holder dies. A build timeout is now one `subprocess.run`
+  argument, but is still a separate decision.
+- *No atomic writes.* rs did them first (#37) and replaced them with the lock (#40).
+- *Subprocess rather than keeping the in-process build behind a process-wide lock.* A lock would have serialised our
+  own builds but still disturbed user threads (cwd, stdout), and still not captured compiler stderr. Capturing that
+  in-process would need `os.dup2` on fds 1 and 2, which is even more process-wide. A subprocess fixes all three. Its
+  cost (one interpreter startup) is paid only on a rebuild, next to seconds of compiling.
+  Considered and rejected: building in-process without `chdir`, by passing absolute paths. setuptools turns an absolute
+  source path into a nested path under `build_temp` (`build/temp…/mnt/data/…/module.o`), which risks Windows' 260-char
+  limit, and `setup()` reads `setup.cfg`/`pyproject.toml` from the cwd.
+- *cwd = the module folder, as before.* User-supplied relative include and link paths resolve against it (the tests
+  use `extra_include_paths=["../../src/test"]`), so it's part of the API.
+- *A generated `setup.py` rather than passing the config on stdin.* It can be read, and rerun by hand to debug a build.
+  It doesn't enter the checksum: everything in it is in the hashed source's header comment, or comes from the
+  interpreter (numpy's include path, which wasn't hashed before either). Tried in review and rejected: a fixed
+  `xenoform/_build.py` reading a generated `build.json`. Only data is generated that way, but it swaps one
+  self-contained, conventional pybind11 file for a package module plus a data file, which reads worse, not better.
+  (Coverage wasn't the obstacle: `[tool.coverage.run] patch = ["subprocess"]` measured it in the child.)
+- *`-P`*, so the module folder isn't put on the child's `sys.path`, where a built module named e.g. `json` would
+  shadow the stdlib. Not `-I`, which also drops user site-packages and `PYTHONPATH`, where pybind11 may be installed.
+- *The raw log tail in the exception*, deliberately crude: PR B will parse out the first error and its notes. The log
+  is read with `errors="replace"`, as MSVC writes in the console's code page.
+- *`.build.lock` files stay* (on POSIX). `filelock` deliberately doesn't delete the file on release: `flock` locks the
+  inode, so a waiter holding the old file open could get the lock while a newcomer creates and locks a new file at the
+  same path. They're empty, hidden, inside the git-ignored `ext/`, and deleted with the module folder. On Windows
+  `filelock` does delete it, as an open file can't be deleted there.
+- *The `_load_module` lock.* Loading by path bypasses importlib's per-module locks, so two free-threaded threads could
+  both miss in `sys.modules` and both load the extension. Its test is a smoke test only, as the race is down to timing.
+  The re-check under the file lock is unit-tested by making the first check stale, for the same reason.
+
+**Follow-ups**
+- PR B: parse gcc/clang and MSVC diagnostics into the `CompilationError` message. PR C: `CppWarning`.
+- An embedded interpreter whose `sys.executable` isn't Python (Blender, uWSGI) can't build. Documented in the README.
+- On Windows, a process that has loaded the old DLL still blocks a rebuild that overwrites it. The lock doesn't change
+  that.
+- Builds outside xenoform (rerunning `setup.py` by hand) don't take the lock.
+
+---
+
 ## 2026-10-24 — Small type-translation fixes: overrides, numpy int widths, non-finite defaults
 
 **Why** — Three small gaps found while comparing with `xenoform-rs` (see `PARITY_PLAN.md`, PR 3):

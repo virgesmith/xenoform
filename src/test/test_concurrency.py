@@ -127,3 +127,21 @@ def test_threads_loading_the_same_module(ext_root: Path) -> None:
     with ThreadPoolExecutor(N) as pool:
         modules = list(pool.map(load, range(N)))
     assert all(m is modules[0] for m in modules)
+
+
+def test_threads_building_different_modules(ext_root: Path) -> None:
+    # builds share no process state (cwd, stdout), so threads can build different modules at once
+    barrier = Barrier(N)
+
+    def build(i: int) -> int:
+        barrier.wait()
+        module = compile_module._check_build_fetch_module_impl(f"concurrency_{i}", _spec(f"[]() {{ return {i}; }}"))
+        return module._answer()
+
+    with ThreadPoolExecutor(N) as pool:
+        assert list(pool.map(build, range(N))) == list(range(N))
+
+    for i in range(N):
+        log = (ext_root / f"concurrency_{i}_ext" / "build.log").read_text(errors="replace")
+        assert f"concurrency_{i}" in log
+        assert not any(f"concurrency_{j}" in log for j in range(N) if j != i)

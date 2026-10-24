@@ -6,6 +6,7 @@ import pytest
 
 from xenoform import CompilationError, CppTypeError, Platform, platform_specific
 from xenoform.compile import _check_build_fetch_module_impl, _parse_macros, compile
+from xenoform.config import get_config
 from xenoform.cppmodule import FunctionSpec, ModuleSpec, ReturnValuePolicy
 from xenoform.utils import translate_function_signature
 
@@ -207,5 +208,7 @@ def test_compile_error() -> None:
             name="error", body=f, arg_annotations="", scope=(), return_value_policy=ReturnValuePolicy.Automatic
         )
     )
-    with pytest.raises(CompilationError):
+    with pytest.raises(CompilationError, match="#error"):
         _check_build_fetch_module_impl("broken_module", spec)
+    # the compiler's own output reaches the log, even under pytest
+    assert "#error" in (get_config().extmodule_root / "broken_module_ext" / "build.log").read_text(errors="replace")

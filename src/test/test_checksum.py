@@ -80,12 +80,11 @@ def test_up_to_date_check_runs_no_subprocess(ext_root: Path, logs: MagicMock, mo
     module_cpp = ext_root / "checksum_reuse_ext" / "module.cpp"
     mtime = module_cpp.stat().st_mtime_ns
 
-    # neither clang-format, nor a python subprocess (the old check), nor a build may run
+    # neither clang-format nor a build (both subprocesses) may run
     def forbidden(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("up-to-date check must not run a subprocess or a build")
 
     monkeypatch.setattr(subprocess, "run", forbidden)
-    monkeypatch.setattr(compile_module, "setup", forbidden)
     logs.reset_mock()
 
     module = compile_module._check_build_fetch_module_impl("checksum_reuse", _spec("[]() { return 42; }"))

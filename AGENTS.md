@@ -128,12 +128,14 @@ Tests are in [src/test/](src/test/). Examples are in [examples/](examples/).
 2. `cppmodule.ModuleSpec.make_source()` renders `module.cpp` from the templates and returns the
    (unformatted) code plus its checksum.
 3. `_check_build_fetch_module_impl` compares the checksum with the module's `.checksum` file. If they
-   differ (or either file is missing), it deletes the checksum file, writes `module.cpp` (formatted by
-   `clang-format`), builds the extension with `Pybind11Extension` + `build_ext` and writes the new
-   checksum. It then loads the binary by path (`_load_module`).
+   differ (or either file is missing), it takes a `FileLock` on the module's `.build.lock` and checks
+   again (another process or thread may have just built it). If it's still stale, `_build` deletes the
+   checksum file, writes `module.cpp` (formatted by `clang-format`) and a generated `setup.py`, runs
+   `sys.executable setup.py build_ext --inplace` in the module folder as a subprocess (output to
+   `build.log`), and writes the new checksum. It then loads the binary by path (`_load_module`).
 
-Generated artifacts (binaries, `module.cpp`, `build.log`) are written to an `ext/` subdirectory by
-default and are git-ignored. The location is configurable via `XENOFORM_EXTMODULE_ROOT`.
+Generated artifacts (binaries, `module.cpp`, `setup.py`, `build.log`, `.build.lock`) are written to an
+`ext/` subdirectory by default and are git-ignored. The location is configurable via `XENOFORM_EXTMODULE_ROOT`.
 
 ## Type Mapping (`extension_types.py`)
 
@@ -228,7 +230,7 @@ real C++, so they are inherently integration-level — every code path should be
 ## Developer Rules
 
 - **Runtime dependencies are intentional.** `pybind11`, `numpy`, `setuptools`, `clang-format`,
-  `itrx`, and `pydantic-settings` are runtime deps. New runtime deps need a strong justification;
+  `filelock`, `itrx`, and `pydantic-settings` are runtime deps. New runtime deps need a strong justification;
   dev-only tools go in `[dependency-groups.dev]` in [pyproject.toml](pyproject.toml).
 - **Only the three latest Python minor versions are supported** (currently 3.13, 3.14, 3.15). When a
   new minor version is released, drop the oldest and add the new one in a single PR. That PR must keep
@@ -292,8 +294,10 @@ real C++, so they are inherently integration-level — every code path should be
   cannot capture enclosing scope.
 - For methods, annotate the receiver (`self: Self` / `cls: type`); static methods are not handled by
   `get_function_scope`.
-- `build.log` capture relies on stdout redirection and **won't appear when running under pytest** —
-  don't rely on it when diagnosing a failing test; reproduce outside pytest.
+- **The build runs in a subprocess, with the module folder as its cwd.** Never reintroduce `os.chdir`
+  or `redirect_stdout` in the build path: both are process-wide, and broke threads building different
+  modules at once. User-supplied relative include/link paths resolve against the module folder, so the
+  cwd is part of the API. `build.log` gets the compiler's full output, under pytest too.
 
 ## Reviewer Checklist
 
