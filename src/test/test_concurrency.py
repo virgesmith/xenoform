@@ -99,34 +99,36 @@ def test_recheck_under_the_lock(ext_root: Path, monkeypatch: pytest.MonkeyPatch)
     assert (ext_root / "concurrency_recheck_ext" / ".build.lock").exists()
 
 
-def test_up_to_date_path_takes_no_lock(ext_root: Path) -> None:
+def test_up_to_date_path_takes_no_lock(ext_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # the files a current build leaves, without running one
     spec = _spec("[]() { return 42; }")
-    compile_module._check_build_fetch_module_impl("concurrency_nolock", spec)
-    lock_path = ext_root / "concurrency_nolock_ext" / ".build.lock"
-    lock_path.unlink(missing_ok=True)
-
-    compile_module._check_build_fetch_module_impl("concurrency_nolock", spec)
-    assert not lock_path.exists()
-
-
-def test_threads_loading_the_same_module(ext_root: Path) -> None:
-    # a smoke test: the race it guards against is down to timing, so it can't reliably fail without the lock
-    module_dir = ext_root / "concurrency_load_ext"
+    _, hashval = spec.make_source("concurrency_nolock")
+    module_dir = ext_root / "concurrency_nolock_ext"
     module_dir.mkdir(parents=True)
-    spec = _spec("[]() { return 42; }")
-    code, hashval = spec.make_source("concurrency_load")
-    compile_module._build(module_dir, "concurrency_load", spec, code, hashval)
+    compile_module._get_binary_path(module_dir, "concurrency_nolock").touch()
+    compile_module._get_checksum_path(module_dir, "concurrency_nolock").write_text(hashval)
+    monkeypatch.setattr(compile_module, "_load_module", MagicMock())
 
+    compile_module._check_build_fetch_module_impl("concurrency_nolock", spec)
+    assert not (module_dir / ".build.lock").exists()
+
+
+def test_threads_loading_the_same_module(tmp_path: Path) -> None:
+    # _load_module takes any module file, so a python one that records each run of its body stands in for an
+    # extension. The race it guards against is down to timing, so this can't reliably fail without the lock
+    runs = tmp_path / "runs"
+    source = tmp_path / "concurrency_load.py"
+    source.write_text(f"with open({str(runs)!r}, 'a') as f:\n    f.write('x')\n")
     barrier = Barrier(N)
-    binary_path = compile_module._get_binary_path(module_dir, "concurrency_load")
 
     def load(_: int) -> object:
         barrier.wait()
-        return compile_module._load_module("concurrency_load_ext.concurrency_load", binary_path)
+        return compile_module._load_module("concurrency_load_ext.concurrency_load", source)
 
     with ThreadPoolExecutor(N) as pool:
         modules = list(pool.map(load, range(N)))
     assert all(m is modules[0] for m in modules)
+    assert runs.read_text() == "x"
 
 
 def test_threads_building_different_modules(ext_root: Path) -> None:

@@ -16,9 +16,6 @@ from xenoform.logger import Logger
 # need to import this way to disambiguate compile the module from compile the decorator
 compile_module = importlib.import_module("xenoform.compile")
 
-# rebuilding a module that this process has loaded fails on Windows: the loaded .pyd is locked
-skip_rebuild_on_windows = pytest.mark.skipif(sys.platform == "win32", reason="a loaded .pyd can't be overwritten")
-
 
 def _spec(body: str) -> ModuleSpec:
     return ModuleSpec().add_function(
@@ -59,7 +56,20 @@ def test_read_checksum_when_absent(tmp_path: Path) -> None:
     assert compile_module._read_checksum(tmp_path / "missing_ext", "m") is None
 
 
-def test_build_writes_checksum(ext_root: Path, logs: MagicMock) -> None:
+def _fake_module(module_dir: Path, module_name: str, *, checksum: str | None, binary: bool = True) -> None:
+    """The files a build leaves, without running one: the check only looks at whether they exist and what they hold"""
+    module_dir.mkdir(parents=True, exist_ok=True)
+    if binary:
+        compile_module._get_binary_path(module_dir, module_name).touch()
+    if checksum is not None:
+        compile_module._get_checksum_path(module_dir, module_name).write_text(checksum)
+
+
+HASH = "a" * 64
+
+
+def test_build_writes_checksum_then_reuses_it(ext_root: Path, logs: MagicMock, monkeypatch: pytest.MonkeyPatch) -> None:
+    # the one real build here: everything else about the check is decided by the files it leaves
     spec = _spec("[]() { return 42; }")
     module = compile_module._check_build_fetch_module_impl("checksum_build", spec)
     assert module._answer() == 42
@@ -72,73 +82,60 @@ def test_build_writes_checksum(ext_root: Path, logs: MagicMock) -> None:
     # the hash is of the unformatted source; the source on disk is formatted, with the hash embedded
     code, hashval = spec.make_source("checksum_build")
     assert checksum == hashval
-    assert (module_dir / "module.cpp").read_text() == compile_module.format_cpp(code.replace("__HASH__", hashval))
+    module_cpp = module_dir / "module.cpp"
+    assert module_cpp.read_text() == compile_module.format_cpp(code.replace("__HASH__", hashval))
 
-
-def test_up_to_date_check_runs_no_subprocess(ext_root: Path, logs: MagicMock, monkeypatch: pytest.MonkeyPatch) -> None:
-    compile_module._check_build_fetch_module_impl("checksum_reuse", _spec("[]() { return 42; }"))
-    module_cpp = ext_root / "checksum_reuse_ext" / "module.cpp"
-    mtime = module_cpp.stat().st_mtime_ns
-
-    # neither clang-format nor a build (both subprocesses) may run
+    # neither clang-format nor a build (both subprocesses) may run on the up-to-date path
     def forbidden(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("up-to-date check must not run a subprocess or a build")
 
     monkeypatch.setattr(subprocess, "run", forbidden)
+    mtime = module_cpp.stat().st_mtime_ns
     logs.reset_mock()
 
-    module = compile_module._check_build_fetch_module_impl("checksum_reuse", _spec("[]() { return 42; }"))
+    module = compile_module._check_build_fetch_module_impl("checksum_build", spec)
     assert module._answer() == 42
     assert _logged(logs, "up-to-date")
     assert module_cpp.stat().st_mtime_ns == mtime
 
 
-@skip_rebuild_on_windows
-def test_missing_stale_or_other_abi_checksum_rebuilds(ext_root: Path, logs: MagicMock) -> None:
-    spec = _spec("[]() { return 42; }")
-    compile_module._check_build_fetch_module_impl("checksum_rebuild", spec)
-    module_dir = ext_root / "checksum_rebuild_ext"
-    checksum_path = compile_module._get_checksum_path(module_dir, "checksum_rebuild")
-    good_hash = checksum_path.read_text()
+@pytest.mark.parametrize(
+    ("binary", "checksum", "current", "log"),
+    [
+        (True, HASH, True, "up-to-date"),
+        (True, "0" * 64, False, "outdated"),
+        (True, None, False, "not found"),
+        # a checksum without its binary isn't trusted
+        (False, HASH, False, "not found"),
+    ],
+    ids=["matching", "stale", "missing", "no-binary"],
+)
+def test_is_current(
+    tmp_path: Path, logs: MagicMock, binary: bool, checksum: str | None, current: bool, log: str
+) -> None:
+    _fake_module(tmp_path, "m", checksum=checksum, binary=binary)
+    assert compile_module._is_current(tmp_path, "m", HASH) is current
+    assert _logged(logs, log)
 
-    # stale
-    checksum_path.write_text("0" * 64)
-    logs.reset_mock()
-    compile_module._check_build_fetch_module_impl("checksum_rebuild", spec)
-    assert _logged(logs, "outdated")
-    assert checksum_path.read_text() == good_hash
 
-    # missing, but another ABI's checksum holds the right hash: it must not vouch for this ABI's binary
-    checksum_path.unlink()
-    (module_dir / "checksum_rebuild.other-abi.checksum").write_text(good_hash)
-    logs.reset_mock()
-    compile_module._check_build_fetch_module_impl("checksum_rebuild", spec)
+def test_other_abis_checksum_is_ignored(tmp_path: Path, logs: MagicMock) -> None:
+    # another ABI's checksum holds the right hash, but it must not vouch for this ABI's binary
+    _fake_module(tmp_path, "m", checksum=None)
+    (tmp_path / "m.other-abi.checksum").write_text(HASH)
+    assert not compile_module._is_current(tmp_path, "m", HASH)
     assert _logged(logs, "not found")
-    assert _logged(logs, "(re)building")
-
-    # a checksum without its binary isn't trusted
-    compile_module._get_binary_path(module_dir, "checksum_rebuild").unlink()
-    logs.reset_mock()
-    compile_module._check_build_fetch_module_impl("checksum_rebuild", spec)
-    assert _logged(logs, "not found")
-    assert _logged(logs, "(re)building")
 
 
-@skip_rebuild_on_windows
-def test_failed_build_leaves_no_checksum(ext_root: Path, logs: MagicMock) -> None:
-    good, broken = _spec("[]() { return 42; }"), _spec("[]() { return undefined_name; }")
-    compile_module._check_build_fetch_module_impl("checksum_failure", good)
-    checksum_path = compile_module._get_checksum_path(ext_root / "checksum_failure_ext", "checksum_failure")
+@pytest.mark.usefixtures("logs")
+def test_failed_build_leaves_no_checksum(ext_root: Path) -> None:
+    # an earlier build's binary and checksum, now outdated
+    module_dir = ext_root / "checksum_failure_ext"
+    _fake_module(module_dir, "checksum_failure", checksum="0" * 64)
 
     with pytest.raises(CompilationError):
-        compile_module._check_build_fetch_module_impl("checksum_failure", broken)
-    assert not checksum_path.exists()
-
-    # the old binary is still there, but nothing vouches for it, so the good source is rebuilt
-    logs.reset_mock()
-    compile_module._check_build_fetch_module_impl("checksum_failure", good)
-    assert _logged(logs, "not found")
-    assert checksum_path.exists()
+        compile_module._check_build_fetch_module_impl("checksum_failure", _spec("[]() { return undefined_name; }"))
+    # so nothing vouches for the old binary
+    assert not compile_module._get_checksum_path(module_dir, "checksum_failure").exists()
 
 
 _PROBE = """

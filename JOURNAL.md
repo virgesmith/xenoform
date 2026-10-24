@@ -85,6 +85,16 @@ compiler diagnostics) and PR C (`CppWarning`) build on it. Three problems:
   both miss in `sys.modules` and both load the extension. Its test is a smoke test only, as the race is down to timing.
   The re-check under the file lock is unit-tested by making the first check stale, for the same reason.
 
+- *Tests build only where the compiler or the lock is the point.* A warm run (populated `ext/`) took ~84 s, nearly all
+  of it tests compiling into fresh temp folders: `test_checksum.py` (~46 s, from #32), the lifecycle test in
+  `test_caching.py` (~10 s), and this PR's own concurrency tests (~26 s). The up-to-date decision depends only on
+  which files exist and what they hold, so the stale, missing, other-ABI and checksum-without-binary cases now test
+  `_is_current` against fake files, and the lifecycle test fakes `_build`. Real builds remain for one build-and-reuse
+  test, the failed build, the cross-cwd regression from #32, and the three concurrent-build tests. The load-lock
+  test uses a Python module in place of an extension (`_load_module` takes any module file) and now also asserts its
+  body ran once. Warm run ~32 s, coverage unchanged at 100% from a clean `ext/`. The Windows `skip_rebuild_on_windows`
+  marker went with the rebuilds of loaded modules that needed it.
+
 **Follow-ups**
 - PR B: parse gcc/clang and MSVC diagnostics into the `CompilationError` message. PR C: `CppWarning`.
 - An embedded interpreter whose `sys.executable` isn't Python (Blender, uWSGI) can't build. Documented in the README.
