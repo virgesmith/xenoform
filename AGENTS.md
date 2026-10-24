@@ -83,6 +83,7 @@ implementation.
 ```py
 import xenoform
 
+
 @xenoform.compile(vectorise=True)
 def max(i: int, j: int) -> int:  # ty: ignore[empty-body]
     "return i > j ? i : j;"
@@ -216,8 +217,8 @@ docstring examples. **Coverage must stay at 100%**, but the threshold is *not* e
 a pre-existing `ext/` skews which build/caching branches run, so a local run can read below 100%.
 The `--cov-fail-under=100` gate is enforced in CI on the `3.14 / ubuntu-latest` job, which starts
 from a clean checkout (`ext/` is gitignored) so every build path is exercised. To reproduce the CI
-number locally, `rm -rf ext` first. Genuinely unreachable branches (a 3.12-only free-threading
-guard, a defensive typing check) are excluded with `# pragma: no cover`. Tests compile and execute
+number locally, `rm -rf ext` first. Genuinely unreachable branches (e.g. a defensive typing
+check) are excluded with `# pragma: no cover`. Tests compile and execute
 real C++, so they are inherently integration-level — every code path should be exercised.
 
 ## Developer Rules
@@ -225,6 +226,12 @@ real C++, so they are inherently integration-level — every code path should be
 - **Runtime dependencies are intentional.** `pybind11`, `numpy`, `setuptools`, `clang-format`,
   `itrx`, and `pydantic-settings` are runtime deps. New runtime deps need a strong justification;
   dev-only tools go in `[dependency-groups.dev]` in [pyproject.toml](pyproject.toml).
+- **Only the three latest Python minor versions are supported** (currently 3.13, 3.14, 3.15). When a
+  new minor version is released, drop the oldest and add the new one in a single PR. That PR must keep
+  `requires-python` and the classifiers in [pyproject.toml](pyproject.toml), the CI matrix in
+  [lint-test.yml](.github/workflows/lint-test.yml) and the matrix listed under [QA Rules](#qa-rules)
+  in step. Code may use any language or stdlib feature of the oldest supported version, and
+  compatibility shims for dropped versions should be removed.
 - **Type translation is the critical path.** Changes to
   [extension_types.py](src/xenoform/extension_types.py) affect every user and must be accompanied
   by tests covering the affected type mappings.
@@ -305,7 +312,7 @@ When reviewing a PR or diff, check:
 
 - Run the full gate suite (`ruff check`, `ruff format --check`, `ty check`, `pytest`, both examples)
   before declaring any task done.
-- CI runs the matrix: Python 3.12, 3.13, 3.14, 3.14t × ubuntu, macos, windows. Flag anything that
+- CI runs the matrix: Python 3.13, 3.14, 3.14t, 3.15 × ubuntu, macos, windows. Flag anything that
   might be platform- or version-specific — especially compiler differences (gcc/clang/MSVC),
   path handling (`PTH` rules), platform-specific compile/link flags (`platform_specific`), and
   free-threaded behaviour. Compiler and header behaviour genuinely differ between platforms.
@@ -345,7 +352,9 @@ pyproject.toml
 ## Branch and Release Policy
 
 - **`main` is branch-protected.** Direct pushes are blocked. All changes must go through a pull
-  request.
+  request. The only required status check is the `all-checks` job in
+  [lint-test.yml](.github/workflows/lint-test.yml), which passes only if every matrix job did, so
+  changing the matrix never needs a ruleset edit.
 - **Releases are triggered by a `v*` tag** (e.g. `v0.1.9`). Pushing such a tag runs
   [publish.yml](.github/workflows/publish.yml), which builds a wheel and publishes to PyPI via
   trusted publishing (OIDC — no API token needed). Do not push a `v*` tag unless the release is

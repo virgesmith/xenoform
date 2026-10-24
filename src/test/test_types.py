@@ -1,5 +1,6 @@
-from typing import Annotated
+from typing import Annotated, Any
 
+import numpy as np
 import numpy.typing as npt
 import pytest
 
@@ -97,11 +98,21 @@ def test_specialised_types() -> None:
 
 
 def test_numpy_types() -> None:
-    cpptype = translate_type(npt.NDArray[int])  # ty:ignore[invalid-type-arguments]
+    cpptype = translate_type(npt.NDArray[int])  # ty: ignore[invalid-type-arguments, invalid-argument-type]
     assert str(cpptype) == "py::array_t<int>"
     assert cpptype.headers(HEADER_REQUIREMENTS) == ["<pybind11/numpy.h>"]
 
-    cpptype = translate_type(npt.NDArray[float])  # ty:ignore[invalid-type-arguments]
+    cpptype = translate_type(npt.NDArray[float])  # ty: ignore[invalid-type-arguments, invalid-argument-type]
+    assert str(cpptype) == "py::array_t<double>"
+    assert cpptype.headers(HEADER_REQUIREMENTS) == ["<pybind11/numpy.h>"]
+
+    # NDArray (an alias of np.ndarray before numpy 2.5, a PEP 695 alias from 2.5) and an explicit np.ndarray
+    # annotation reach py::array_t by different routes, so both must be covered
+    cpptype = translate_type(npt.NDArray[np.float64])  # ty: ignore[invalid-argument-type]
+    assert str(cpptype) == "py::array_t<double>"
+    assert cpptype.headers(HEADER_REQUIREMENTS) == ["<pybind11/numpy.h>"]
+
+    cpptype = translate_type(np.ndarray[Any, np.dtype[np.float64]])
     assert str(cpptype) == "py::array_t<double>"
     assert cpptype.headers(HEADER_REQUIREMENTS) == ["<pybind11/numpy.h>"]
 

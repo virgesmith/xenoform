@@ -15,7 +15,7 @@ def calc_balances_py(data: pd.Series, rate: float) -> pd.Series:
     result_a = result.to_numpy()
     result_a.flags.writeable = True  # required in pandas 3+
     current_value = 0.0
-    for i, value in data.items():
+    for i, value in enumerate(data):
         current_value = (current_value + value) * (1 - rate)
         result_a[i] = current_value
     return result

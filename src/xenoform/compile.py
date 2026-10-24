@@ -6,10 +6,10 @@ import sys
 from collections import defaultdict
 from collections.abc import Callable
 from contextlib import redirect_stderr, redirect_stdout
-from functools import cache, lru_cache, wraps
+from functools import lru_cache, wraps
 from pathlib import Path
 from types import ModuleType
-from typing import ParamSpec, TypeVar, cast
+from typing import Any, cast
 
 import numpy as np
 from itrx import Itr
@@ -132,15 +132,11 @@ def _check_build_fetch_module_impl(
     return importlib.import_module(f"{ext_name}.{module_name}")
 
 
-@cache  # unlimited module cache
+@lru_cache(maxsize=256)
 def _get_module(module_name: str) -> ModuleType:
     module = _check_build_fetch_module_impl(module_name, _module_registry[module_name])
     logger(f"imported compiled module {module.__name__}")
     return module
-
-
-P = ParamSpec("P")
-R = TypeVar("R")
 
 
 def _check_annotations[**P, R](func: Callable[P, R]) -> None:
@@ -157,14 +153,14 @@ def _check_annotations[**P, R](func: Callable[P, R]) -> None:
         raise AnnotationError(f"Function {func.__name__} has missing annotations: {missing_annotations}")  # ty: ignore[unresolved-attribute]
 
 
-@lru_cache  # limited function cache
-def _get_function(module_name: str, function_name: str) -> Callable[P, R]:
+@lru_cache(maxsize=256)
+def _get_function(module_name: str, function_name: str) -> Callable[..., Any]:
     module = _get_module(module_name)
     logger(f"redirected {module_name}.{function_name[1:]} to compiled function {module.__name__}.{function_name}")
     return getattr(module, function_name)
 
 
-def compile(
+def compile[**P, R](
     *,
     vectorise: bool = False,
     define_macros: list[str] | None = None,
@@ -196,7 +192,7 @@ def compile(
     variable (any value enables it), not per-decorator.
     """
 
-    def register_function(func: Callable[P, R]) -> Callable[P, R]:
+    def register_function[**P, R](func: Callable[P, R]) -> Callable[P, R]:
         """This registers the function, actual compilation is deferred"""
         extmodule_root = get_config().extmodule_root
 

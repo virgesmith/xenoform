@@ -5,6 +5,7 @@ from types import EllipsisType, NoneType, UnionType
 from typing import Annotated, Any, Self, get_args, get_origin
 
 import numpy as np
+import numpy.typing as npt
 
 from xenoform.errors import CppTypeError
 
@@ -21,7 +22,10 @@ DEFAULT_TYPE_MAPPING = {
     np.complex64: "std::complex<float>",
     np.complex128: "std::complex<double>",
     str: "std::string",
+    # numpy>=2.5 defines NDArray as a PEP 695 alias, so get_origin(NDArray[T]) is the alias itself, not np.ndarray.
+    # np.ndarray is still needed for numpy<2.5 NDArray and for explicit np.ndarray[shape, dtype[T]] annotations
     np.ndarray: "py::array_t",
+    npt.NDArray: "py::array_t",
     bytes: "py::bytes",
     bytearray: "py::bytearray",
     list: "std::vector",
