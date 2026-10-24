@@ -279,6 +279,12 @@ real C++, so they are inherently integration-level — every code path should be
 - Don't hand-edit anything under `ext/` — it is regenerated. To force a rebuild, change the inline
   code or delete the module's `.checksum` file (or its folder); note that edits to `#include`-d files
   do **not** trigger a rebuild. A binary rebuilt outside xenoform keeps the old checksum.
+- A function's module defaults to the stem of its defining file; `@compile(module_name=...)` overrides it,
+  so functions from several files can share one module. An explicit name must be an ASCII identifier
+  and not a keyword (checked when `compile()` is called): CPython looks for a punycoded `PyInitU_` symbol
+  for non-ASCII names, which pybind11 doesn't generate. Functions sharing a module need distinct names.
+  In notebooks the default isn't deterministic (it comes from the kernel's temporary file for the cell),
+  so notebook code should always pass `module_name`.
 - Functions with conflicting compiler/linker settings (including a different `cxx_std`) must live in
   separate modules — `ModuleSpec.add_function` raises `ValueError` on a `cxx_std` mismatch.
 - Compiled Python lambdas and top-level recursion are unsupported; nested functions are supported but

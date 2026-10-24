@@ -22,6 +22,43 @@ Entry template:
 
 ---
 
+## 2026-10-24 — `module_name` override for `@compile`
+
+**Why** — A function's module was always the stem of its defining file, with no way to change it. So functions from
+several files couldn't share one module, and code in a notebook cell got whatever name ipykernel gives the cell's
+temporary file (numeric, e.g. `PyInit_123456`). That happens to work, because C and importlib don't mind, but it's
+fragile. `xenoform-rs` has had `module_name=` for a long time.
+
+**What**
+- `@compile(module_name: str | None = None)`. If it's not given, the file stem is used as before. Functions with the same
+  `module_name` are registered on the same `ModuleSpec`, so they build into one module, wherever they're defined.
+- An explicit name must be an ASCII identifier and not a keyword, or `compile()` raises `ValueError`.
+- README parameter table and AGENTS.md updated. New `test_module_name.py` (+ `module_name_helper.py`): an override
+  builds into the named module and not the file's; two files share a module; invalid names raise.
+
+**Design decisions**
+- *Validated when `compile()` is called*, not on first call. A bad name then fails at the decorator line, not deep in
+  a build, which matters because compilation is deferred.
+- *ASCII only.* `str.isidentifier()` accepts `café`, but CPython looks for a non-ASCII extension module's init function
+  as `PyInitU_` plus the punycoded name, and pybind11 only generates `PyInit_<name>`. Such a module would build and
+  then fail to import.
+- *Only explicit names are validated.* Checking the default stem too would break notebooks and any file whose stem
+  isn't an identifier, which work today. That's left for the notebooks investigation (see `PARITY_PLAN.md`).
+- *`ValueError`*, as for the existing `cxx_std` mismatch, rather than a new error type.
+- *Same semantics as `xenoform-rs`*: a shared name means a shared module, and the existing checks for conflicting
+  settings (e.g. `cxx_std`) apply across files.
+
+**Follow-ups**
+- Two functions with the same name (and scope) sharing a module give the same C++ name. pybind11 then registers them
+  as overloads rather than raising, so each python stub dispatches to both. Checked: with `f(int)` in one file and
+  `f(str)` in another, the first file's `f("y")` runs the second's implementation. This was already possible
+  within one file. Not handled here. A duplicate-name check in `ModuleSpec.add_function` would catch it.
+- The README, AGENTS.md and the docstring say to set `module_name` in notebooks, where the default comes from the
+  kernel's temporary file for the cell and isn't deterministic. Fuller notebook guidance (e.g. kernel restarts)
+  belongs to the notebooks item.
+
+---
+
 ## 2026-10-24 — Checksum file per ABI; load modules by path
 
 **Why** — To decide whether a module was up to date, `_get_module_checksum` started a Python subprocess that imported

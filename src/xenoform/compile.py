@@ -1,6 +1,7 @@
 import importlib
 import importlib.util
 import inspect
+import keyword
 import os
 import sys
 import sysconfig
@@ -191,6 +192,7 @@ def compile[**P, R](
     return_value_policy: ReturnValuePolicy = ReturnValuePolicy.Automatic,
     cxx_std: int = 20,
     help: str | None = None,
+    module_name: str | None = None,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     Decorator factory for compiling C/C++ function implementations into extension modules.
@@ -204,6 +206,9 @@ def compile[**P, R](
         extra_link_args (list[str], optional): Extra arguments to pass to the linker.
         cxx_std (int, optional, default 20): C++ standard to compile
         help (str, optional): Docstring for the function
+        module_name (str, optional): Name of the extension module to build the function into, defaulting to the
+            stem of the file defining the function. Functions from different files sharing a name share a module.
+            Set it in notebooks, where the default (from the kernel's temporary file for the cell) isn't deterministic.
 
     Returns:
         Callable[..., Callable[..., Any]]: A function that when called, will return the compiled function.
@@ -211,6 +216,12 @@ def compile[**P, R](
     Debug logging is controlled globally by the presence of the `XENOFORM_VERBOSE` environment
     variable (any value enables it), not per-decorator.
     """
+    # non-ASCII identifiers are valid python, but CPython looks for a punycoded PyInitU_ symbol for them,
+    # which pybind11 doesn't generate
+    if module_name is not None and not (
+        module_name.isascii() and module_name.isidentifier() and not keyword.iskeyword(module_name)
+    ):
+        raise ValueError(f"module_name {module_name!r} must be an ASCII python identifier and not a keyword")
 
     def register_function[**P, R](func: Callable[P, R]) -> Callable[P, R]:
         """This registers the function, actual compilation is deferred"""
@@ -221,10 +232,10 @@ def compile[**P, R](
         _check_annotations(func)
 
         sig, args, headers = translate_function_signature(func)
-        module_name = f"{Path(inspect.getfile(func)).stem}"
+        target_module = module_name or Path(inspect.getfile(func)).stem
         function_body = sig + " {" + (func.__doc__ or "") + "}"
 
-        logger(f"registering {module_name}_ext.{module_name}.{func.__name__} (in {extmodule_root})")  # ty: ignore[unresolved-attribute]
+        logger(f"registering {target_module}_ext.{target_module}.{func.__name__} (in {extmodule_root})")  # ty: ignore[unresolved-attribute]
 
         if vectorise:
             function_body = f"py::vectorize({function_body})"
@@ -252,7 +263,7 @@ def compile[**P, R](
             help=help,
         )
 
-        _module_registry[module_name].add_function(
+        _module_registry[target_module].add_function(
             function_spec,
             headers=headers + (extra_includes or []),
             include_paths=extra_include_paths or [],
@@ -265,7 +276,7 @@ def compile[**P, R](
         @wraps(func)
         def call_function(*args: P.args, **kwargs: P.kwargs) -> R:
             """Compilation is deferred until here (and cached)"""
-            cpp_fn = cast(Callable[P, R], _get_function(module_name, function_spec.qualified_cpp_name()))
+            cpp_fn = cast(Callable[P, R], _get_function(target_module, function_spec.qualified_cpp_name()))
             return cpp_fn(*args, **kwargs)
 
         return call_function
