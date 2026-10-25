@@ -6,11 +6,11 @@ import subprocess
 import sys
 import sysconfig
 import threading
-from collections import defaultdict
+from collections import ChainMap, defaultdict
 from collections.abc import Callable
 from functools import lru_cache, wraps
 from pathlib import Path
-from types import ModuleType
+from types import FrameType, ModuleType
 from typing import Any, cast
 
 import numpy as np
@@ -22,7 +22,14 @@ from xenoform.cppmodule import FunctionSpec, ModuleSpec, ReturnValuePolicy
 from xenoform.diagnostics import CppDiagnostic, brief, parse_diagnostics
 from xenoform.errors import AnnotationError, CompilationError
 from xenoform.logger import get_logger
-from xenoform.utils import deduplicate, format_cpp, get_function_scope, translate_function_signature
+from xenoform.utils import (
+    deduplicate,
+    format_cpp,
+    get_function_scope,
+    parse_constant,
+    translate_constant,
+    translate_function_signature,
+)
 
 logger = get_logger()
 
@@ -219,6 +226,23 @@ def _get_module(module_name: str) -> ModuleType:
     return module
 
 
+def _translate_constants(entries: list[str], frame: FrameType) -> tuple[list[str], list[str]]:
+    """
+    Look up each constant by name where the decorator is written (locals, e.g. a function or class body, shadowing
+    globals, which include imported names), and render it as a C++ declaration. Values are captured now
+    """
+    scope = ChainMap(frame.f_locals, frame.f_globals)
+    declarations, headers = [], []
+    for entry in entries:
+        name, cpp_type = parse_constant(entry)
+        if name not in scope:
+            raise ValueError(f"constant {name!r} not found where @compile is used")
+        declaration, constant_headers = translate_constant(name, scope[name], cpp_type)
+        declarations.append(declaration)
+        headers += constant_headers
+    return declarations, headers
+
+
 def _check_annotations[**P, R](func: Callable[P, R]) -> None:
     """Ensures all args and return are typed"""
     sig = inspect.signature(func)
@@ -252,6 +276,7 @@ def compile[**P, R](
     cxx_std: int = 20,
     help: str | None = None,
     module_name: str | None = None,
+    constants: list[str] | None = None,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """
     Decorator factory for compiling C/C++ function implementations into extension modules.
@@ -268,6 +293,8 @@ def compile[**P, R](
         module_name (str, optional): Name of the extension module to build the function into, defaulting to the
             stem of the file defining the function. Functions from different files sharing a name share a module.
             Set it in notebooks, where the default (from the kernel's temporary file for the cell) isn't deterministic.
+        constants (list[str], optional): Python variables to declare as C++ constants in the module, by name:
+            "NAME", or "NAME: cpp_type" to override the type. Looked up where the decorator is written.
 
     Returns:
         Callable[..., Callable[..., Any]]: A function that when called, will return the compiled function.
@@ -281,6 +308,9 @@ def compile[**P, R](
         module_name.isascii() and module_name.isidentifier() and not keyword.iskeyword(module_name)
     ):
         raise ValueError(f"module_name {module_name!r} must be an ASCII python identifier and not a keyword")
+
+    # the caller's frame is the scope the decorator is written in. It's only read here, never stored
+    constant_defs, constant_headers = _translate_constants(constants, sys._getframe(1)) if constants else ([], [])
 
     def register_function[**P, R](func: Callable[P, R]) -> Callable[P, R]:
         """This registers the function, actual compilation is deferred"""
@@ -324,11 +354,12 @@ def compile[**P, R](
 
         _module_registry[target_module].add_function(
             function_spec,
-            headers=headers + (extra_includes or []),
+            headers=headers + constant_headers + (extra_includes or []),
             include_paths=extra_include_paths or [],
             define_macros=define_macros or [],
             extra_compile_args=extra_compile_args or [],
             extra_link_args=extra_link_args or [],
+            constants=constant_defs,
             cxx_std=cxx_std,
         )
 

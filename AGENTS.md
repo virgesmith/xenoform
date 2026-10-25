@@ -252,6 +252,10 @@ real C++, so they are inherently integration-level — every code path should be
   `group_headers` orders them deliberately — `pybind11/pybind11.h` must come last.
 - **The `Annotated` override mechanism is the escape hatch.** Do not special-case types in the core
   translation logic when an `Annotated[T, "cpp_type"]` override can solve the problem instead.
+- **Constants are the one exception to `Annotated`.** `@compile(constants=["NAME: cpp_type"])` types a constant
+  in the entry, because an annotation isn't attached to a value and is lost on import (xenoform-rs found this on its
+  first real use). `str` → `std::string_view` is likewise a constants-only special case. Constants are rendered with
+  brace initialisation, which makes narrowing a compile error; keep it that way.
 - **Free-threaded support must be preserved.** The library builds GIL-free extension modules
   (`py::mod_gil_not_used()`) when running under free-threaded Python (`3.14t`), unless
   `XENOFORM_DISABLE_FT` is set. Changes affecting the module template or build flags must not

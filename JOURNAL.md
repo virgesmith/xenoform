@@ -22,6 +22,71 @@ Entry template:
 
 ---
 
+## 2026-10-25 — Module-level constants via `@compile(constants=...)`
+
+**Why** — The C++ body is the docstring, and an f-string is never a docstring, so C++ code had no way to refer to a
+Python value: it had to be retyped, and kept in sync by hand. Ported from `xenoform-rs` #31 and its follow-ups
+(see `XF_PARITY_PLAN.md`, PR 7).
+
+**What**
+- `@compile(constants=["N", "BIG: uint64_t"])`. Each entry is a name, optionally with a C++ type after the first `:`.
+  The value is looked up where the decorator is written (the caller's frame: locals, then globals, which include
+  imports) when `compile()` is called. It's rendered by `translate_constant` (utils.py) as
+  `constexpr <type> NAME{<value>};` at namespace scope, before `PYBIND11_MODULE`.
+- Without an explicit type, the type is translated from the value's type, as for arguments. numpy scalars keep their
+  width, but render as the equivalent Python value. `str` becomes `std::string_view`. The literal comes from
+  `_translate_value`, so `inf`/`nan` work (with `<limits>`), and anything without a literal raises `TypeError`.
+- `ModuleSpec.constants` is a set of rendered declarations, emitted sorted.
+- `parse_constant` rejects a name that isn't an ASCII identifier or is a C++ keyword, and an empty type after `:`, with
+  `ValueError`. An unknown name raises `ValueError` too. All of these happen at decoration.
+- README "Constants" section and parameter table, AGENTS.md rule, and `test_constants.py`:
+  - module-level, imported (`math.pi`), class-body and local constants, a local shadowing a global, an explicit type;
+  - numpy and non-finite values, identical declarations from two functions collapsing;
+  - a conflicting redefinition and a narrowing conversion, both as `CompilationError`;
+  - parse and lookup errors;
+  - a hash that doesn't depend on the order constants were added.
+
+**Design decisions**
+- *rs's final design, not its first two.* rs started with a dict of values typed from module annotations. That
+  silently lost the type for an imported constant, because an annotation lives in the declaring module, not on the
+  value. Its second version was a `rust_constant(value, type)` wrapper, which repeated every name. Names with an
+  inline type avoid both. The same reasoning applies here unchanged.
+- *Frame inspection* (`sys._getframe(1)` in `compile()`). It's the only way to see the decorating scope, which includes
+  class bodies and locals; `func.__globals__` can't see either. It's confined to one line, the frame isn't stored, and
+  it's always our direct caller on the same thread, so free-threading isn't a concern. A variable from an enclosing
+  function is visible only if the decorating scope also uses it (checked), as `f_locals` only holds free variables
+  that are referenced. Documented, not worked around.
+- *Brace initialisation, a change from the plan's `= value`.* Python ints are unbounded and `int` maps to C++ `int`, so
+  `BIG = 2**40` with copy-initialisation compiles with a truncated value and at most a warning. With braces, narrowing is ill-formed, so it's a compile error (checked on gcc:
+  `narrowing conversion of '1099511627776' from 'long int' to 'int'`), which #36 now shows clearly. A Python-side
+  range check was rejected: it would duplicate the compiler for every type and override.
+- *`str` → `std::string_view`, a constants-only special case.* `std::string` can't be a `constexpr` variable, so the
+  default would never compile. A `string_view` of a literal is valid for the whole program, and
+  `std::string(NAME)` converts when needed. With an explicit type, the user supplies its headers, as with an
+  `Annotated` override.
+- *Conflicts are left to the compiler.* A set of rendered declarations collapses identical ones. The same name with
+  different values gives two declarations, which the compiler rejects as a redefinition that names the constant.
+  Rejected: a Python-side check, which would be extra code for a rare case whose error is already clear.
+- *Sorted when emitted.* The set's iteration order depends on string hashing, which varies between processes
+  (`PYTHONHASHSEED`), so unsorted it would rebuild modules for no reason. rs hit exactly this with its sets.
+- *`ValueError` for entry and lookup errors*, as for `module_name`. Type errors keep their existing types:
+  `CppTypeError` for a value with no mapping, and `TypeError` for one with no literal.
+- *The C++ keyword list is spelled out* (C++20), under `# fmt: off` so it stays compact. Python's `keyword` module
+  can't help, and many C++ keywords (`int`, `new`, `this`) are valid Python names.
+
+**Follow-ups**
+- Containers aren't supported: `_translate_value` has no literal for a non-empty one. With an explicit type such as
+  `std::array<int, 3>`, a list could be brace-initialised, if wanted.
+- Linters can't see names inside `constants` strings, so an import used only there is flagged F401, and the
+  pre-commit `ruff-check --fix` would delete it. The constant then fails loudly (`not found`), not silently.
+  Documented (`# noqa: F401`). It's the main cost of names over values.
+- A constant named like a macro the headers define (e.g. `EOF`) would be preprocessed away, and the compiler error
+  won't say why. This can't be checked in Python.
+- Enum members (rs proposed `mod X { pub const A }`) aren't supported: an `Enum` has no mapping. A `namespace X`
+  rendering would be the C++ equivalent.
+
+---
+
 ## 2026-10-25 — Compiler errors in `CompilationError`
 
 **Why** — PR B of the re-cut PRs 4/5 (see the entry below). Since #35 the compiler's output reaches `build.log`, and a
