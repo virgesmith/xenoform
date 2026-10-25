@@ -1,6 +1,6 @@
 [project]
 name = "xenoform"
-version = "0.1.10"
+version = "0.2.0"
 description = "Inlined C++ functions"
 readme = "README.md"
 authors = [
