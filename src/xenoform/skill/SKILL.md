@@ -193,9 +193,12 @@ needs `# noqa: F841`.
   module's `.checksum` file.
 - **Code must be threadsafe under a free-threaded interpreter** (modules are built without the GIL);
   set `XENOFORM_DISABLE_FT` to opt out.
-- **Notebooks**: set `module_name` (the default comes from the kernel's temporary file for the cell,
-  so isn't deterministic). Running the defining cell only registers the function; it compiles on
-  the first call. A process can't unload a compiled module, so changes need a kernel restart.
+- **Notebooks**: set `module_name` (the default is a hash of the cell's source, so each edit compiles
+  a new module and orphans the old one's `ext/` folder). Running the defining cell only registers the
+  function; it compiles on the first call, and compile errors appear in that cell. **Any change needs
+  a kernel restart**: a process can't unload a compiled module, so without one an edit after a call is
+  silently ignored, an edit before the first call may silently lose to the old definition, and a
+  function added to a used module raises `AttributeError`.
 - **Built modules aren't importable by name** (`import my_module_ext.my_module`): xenoform loads
   them from their files.
 
@@ -207,6 +210,7 @@ needs `# noqa: F841`.
 | `XENOFORM_DISABLE_FT` | If set, build with the GIL even under a free-threaded interpreter. |
 | `XENOFORM_CPP_FORMAT` | clang-format style for the generated source (default `file`, i.e. a `.clang-format` in the project). |
 | `XENOFORM_VERBOSE` | Any value (including empty) logs each step (register, check, build, load, redirect) with timings. |
+| `XENOFORM_BUILD_TIMEOUT` | Seconds a build may take (positive, default 300); a timeout raises `CompilationError`. |
 
 ## Troubleshooting a failed build
 
