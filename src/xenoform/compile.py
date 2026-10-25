@@ -217,14 +217,24 @@ def _build(module_dir: Path, module_name: str, module_spec: ModuleSpec, code: st
     # compiler's stderr only reaches the log via the fd. The cwd is the module dir, so that relative paths in the
     # user's include and link args resolve as they always have. -P keeps the module dir off sys.path, where a built
     # module named e.g. json would shadow the stdlib
-    with log_path.open("wb") as log:
-        result = subprocess.run(
-            [sys.executable, "-P", "setup.py", "build_ext", "--inplace"],
-            cwd=module_dir,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            check=False,
-        )
+    timeout = get_config().build_timeout
+    try:
+        with log_path.open("wb") as log:
+            result = subprocess.run(
+                [sys.executable, "-P", "setup.py", "build_ext", "--inplace"],
+                cwd=module_dir,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                check=False,
+                timeout=timeout,
+            )
+    except subprocess.TimeoutExpired as e:
+        # a CompilationError, so code handling failed builds handles this too. The checksum was deleted above, so the
+        # next call retries
+        raise CompilationError(
+            f"building {qualified_name} timed out after {timeout}s. If the build is just slow, raise "
+            f"XENOFORM_BUILD_TIMEOUT. Output so far: {log_path}"
+        ) from e
     if result.returncode:
         # MSVC writes in the console's code page, so the log may not be valid UTF-8
         log = log_path.read_text(encoding="utf-8", errors="replace")
@@ -333,7 +343,7 @@ def compile[**P, R](
         help (str, optional): Docstring for the function
         module_name (str, optional): Name of the extension module to build the function into, defaulting to the
             stem of the file defining the function. Functions from different files sharing a name share a module.
-            Set it in notebooks, where the default (from the kernel's temporary file for the cell) isn't deterministic.
+            Set it in notebooks, where the default (a hash of the cell's source) changes with every edit.
         constants (list[str], optional): Python variables to declare as C++ constants in the module, by name:
             "NAME", or "NAME: cpp_type" to override the type. Looked up where the decorator is written.
 

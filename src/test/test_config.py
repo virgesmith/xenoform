@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from xenoform.config import XenoformConfig, get_config
 from xenoform.logger import Logger
@@ -45,3 +46,18 @@ if __name__ == "__main__":
     print(f"{os.getenv("XENOFORM_CPP_FORMAT")=}")
     print(f"{os.getenv("XENOFORM_DISABLE_FT")=}")
     print(f"{os.getenv("XENOFORM_EXTMODULE_ROOT")=}")
+
+
+def test_build_timeout(monkeypatch) -> None:
+    monkeypatch.delenv("XENOFORM_BUILD_TIMEOUT", raising=False)
+    assert XenoformConfig().build_timeout == 300
+    monkeypatch.setenv("XENOFORM_BUILD_TIMEOUT", "900")
+    assert XenoformConfig().build_timeout == 900
+
+
+@pytest.mark.parametrize("value", ["0", "-1"])
+def test_build_timeout_must_be_positive(monkeypatch, value: str) -> None:
+    # 0 would time out every build
+    monkeypatch.setenv("XENOFORM_BUILD_TIMEOUT", value)
+    with pytest.raises(ValidationError, match="build_timeout"):
+        XenoformConfig()

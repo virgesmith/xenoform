@@ -124,7 +124,7 @@ kwarg | type(=default) | description
 `cxx_std` | `int=20` | C++ standard to compile against
 `return_value_policy` | `ReturnValuePolicy=ReturnValuePolicy.Automatic` | [Return value policy](https://pybind11.readthedocs.io/en/stable/advanced/functions.html#return-value-policies)
 `help` | `str \| None=None` | Docstring for the function
-`module_name` | `str \| None=None` | Extension module to build the function into, by default the stem of the file defining it. Must be an ASCII identifier. Functions from several files with the same `module_name` are built into one module, so must have compatible settings and distinct names. In notebooks, set it explicitly: the default comes from the kernel's temporary file for the cell, so isn't deterministic
+`module_name` | `str \| None=None` | Extension module to build the function into, by default the stem of the file defining it. Must be an ASCII identifier. Functions from several files with the same `module_name` are built into one module, so must have compatible settings and distinct names. In notebooks, set it explicitly: see [Notebooks](#notebooks)
 `constants` | `list[str] \| None=None` | Python variables to declare as C++ constants, by name, see [below](#constants)
 
 ### Constants
@@ -367,6 +367,26 @@ relative to the working directory.
 By default, if the interpreter is free-threaded, extension modules will be built without the GIL. This requires the
 extension code to be threadsafe. If xenoform detects an environment variable `XENOFORM_DISABLE_FT`, free-threading is
 disabled.
+
+### Build Timeout
+
+A build that takes longer than `XENOFORM_BUILD_TIMEOUT` seconds (default 300) is stopped, and raises `CompilationError`.
+Raise it if your builds are legitimately slow, e.g. on a slow CI runner or with heavy template code. The next call
+retries the build.
+
+## Notebooks
+
+`@compile` works in Jupyter notebooks, with three rules:
+
+- **Set `module_name`**, e.g. `@compile(module_name="nb")`. By default the module is named after the file defining the
+  function, and for a notebook cell that's a temporary file named by a hash of the cell's source. So every edit to the
+  cell compiles a new module, and leaves the old one's folder behind in `ext/` (safe to delete).
+- **Running the defining cell only registers the function.** The module is compiled when a cell first calls one of
+  its functions, and compile errors appear in *that* cell's output.
+- **Any change needs a kernel restart.** A process can't unload a compiled module. Without a restart, an edit to a
+  function that has been called is silently ignored, an edit made before the first call may silently lose to the
+  old definition, and a function added to a module that has been used raises `AttributeError`. The same applies to
+  `@compile` functions in an imported `.py` file (`%autoreload` doesn't help).
 
 ## Type Translations
 

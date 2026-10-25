@@ -22,6 +22,67 @@ Entry template:
 
 ---
 
+## 2026-10-25 — Notebooks, build timeout, and no datetime mapping
+
+**Why** — Three of the parity plan's "Decisions needed" items (`XF_PARITY_PLAN.md`), settled together by the
+maintainer:
+- **Notebooks:** #33 added `module_name`, but the notebook guidance hadn't been checked in a real kernel, and one claim
+  in it turned out to be wrong.
+- **Build timeout:** this was deferred while the build ran in-process. #35 moved it into a subprocess, which made a
+  timeout one argument.
+- **datetime mappings:** to record why there's no default mapping, unlike `xenoform-rs`.
+
+**What**
+- *Notebooks, checked in real ipykernel kernels* (headless, via nbclient; one fresh kernel per scenario):
+  - The default module name is the cell's temporary file, named by **a hash of the cell's source**. It's the same in
+    a fresh kernel (`1814570741_ext` twice) and different after an edit (`2182206545_ext`), so each edit compiles a
+    new module and orphans the old one's `ext/` folder. #33's docs said the name "isn't deterministic", which was
+    wrong. Corrected in the README, the `compile()` docstring, the skill and AGENTS.md.
+  - Running a defining cell only registers. A compile error appears in the cell that first calls the function.
+  - Redefining a function after a call is silently ignored: the module is already loaded.
+  - **Redefining before the first call silently returns the old result.** Both definitions are registered as pybind11
+    overloads of the same name, and the first wins. This is #33's duplicate-name follow-up, hit by ordinary notebook
+    use.
+  - A function added to a module that has been used raises `AttributeError`.
+
+  New README "Notebooks" section with three rules: set `module_name`; defining only registers; any change needs a
+  kernel restart. The skill matches.
+- *Build timeout:* `XenoformConfig.build_timeout: PositiveInt = 300` (`XENOFORM_BUILD_TIMEOUT`) is passed to the build
+  subprocess. A timeout raises `CompilationError` naming the setting and the partial log. README "Build Timeout",
+  AGENTS.md and the skill are updated. AGENTS.md's config list also gains the missing `XENOFORM_VERBOSE`.
+- Tests: the config default, the environment variable and non-positive rejection, and a simulated timeout. Its fake
+  `subprocess.run` times out only the build, letting clang-format run, and the test checks the configured value is
+  passed and no checksum is left behind.
+
+**Design decisions**
+- *The notebook rule is "restart", not a list of failure modes.* The three behaviours differ, but one restart fixes
+  all of them, so users needn't tell them apart. rs reached the same rule. The behaviours are still listed in the README,
+  so a silently stale result can be recognised.
+- *The timeout, as rs #36:*
+  - it's config, not a decorator parameter, because it depends on the machine, not the function, and it isn't hashed;
+  - `PositiveInt`, because 0 would fail every build and "no timeout" would let a hung compiler block the first call,
+    and the build lock, forever;
+  - a `CompilationError`, so code that handles failed builds handles this too;
+  - the checksum is already deleted when the build starts, so the next call retries.
+- *No default `datetime`/`date`/`time`/`timedelta` mapping (maintainer decision).* pybind11's `chrono.h` converts
+  `datetime` to `std::chrono::system_clock::time_point` as naive **local** time and ignores `tzinfo`, so an aware
+  datetime would silently shift by the machine's UTC offset. That's a trap as a default. rs could map datetimes
+  because jiff's `Zoned` keeps the zone. `timedelta` → `std::chrono::duration` has no such problem, but on its own
+  isn't worth a mapping without demand. Users who need chrono types can use an override, e.g.
+  `Annotated[timedelta, "std::chrono::microseconds"]` with `extra_includes=["<pybind11/chrono.h>"]`, accepting
+  pybind11's semantics.
+
+**Follow-ups**
+- **Fix the silent redefinition**: in `ModuleSpec.add_function`, raise when a function with the same C++ name but a
+  different definition is already registered (pointing at a kernel restart). Identical re-registration (re-running an
+  unchanged cell) must stay allowed. That turns the worst notebook case, and the two-files-one-name case from #33,
+  from silent into loud. It changes behaviour, so it needs its own PR.
+- On POSIX, a timeout kills the build's Python process, but a compiler it started may run on until it finishes (as
+  in rs).
+- Orphaned `ext/<hash>_ext` folders from edited notebook cells aren't cleaned up. Setting `module_name` avoids them.
+
+---
+
 ## 2026-10-25 — Scope: on-the-fly development, not distribution
 
 **Why** — The parity plan left xenoform's scope as an open decision. `xenoform-rs` settled the same question (its

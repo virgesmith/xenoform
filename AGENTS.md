@@ -189,6 +189,8 @@ in step with any change to those.
 - `XENOFORM_DISABLE_FT` — if set, build with the GIL even on a free-threaded interpreter.
 - `XENOFORM_CPP_FORMAT` — clang-format style (default `file`, i.e. honour a `.clang-format` in the
   project root).
+- `XENOFORM_BUILD_TIMEOUT` — seconds a build may take (positive, default 300); a timeout raises `CompilationError`.
+- `XENOFORM_VERBOSE` — if set (any value, including empty), log each step with timings.
 
 ## Toolchain
 
@@ -305,8 +307,8 @@ real C++, so they are inherently integration-level — every code path should be
   so functions from several files can share one module. An explicit name must be an ASCII identifier
   and not a keyword (checked when `compile()` is called): CPython looks for a punycoded `PyInitU_` symbol
   for non-ASCII names, which pybind11 doesn't generate. Functions sharing a module need distinct names.
-  In notebooks the default isn't deterministic (it comes from the kernel's temporary file for the cell),
-  so notebook code should always pass `module_name`.
+  In notebooks the default is the cell's temporary file, named by a hash of its source, so it changes with every
+  edit: notebook code should always pass `module_name` (README "Notebooks").
 - Functions with conflicting compiler/linker settings (including a different `cxx_std`) must live in
   separate modules — `ModuleSpec.add_function` raises `ValueError` on a `cxx_std` mismatch.
 - Compiled Python lambdas and top-level recursion are unsupported; nested functions are supported but

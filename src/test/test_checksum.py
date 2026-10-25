@@ -4,6 +4,7 @@ import subprocess
 import sys
 import sysconfig
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -168,3 +169,25 @@ def test_absolute_root_reused_from_another_cwd(tmp_path: Path) -> None:
     second = run()
     assert "up-to-date" in second
     assert "(re)building" not in second
+
+
+def test_build_timeout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        compile_module, "get_config", lambda: XenoformConfig(extmodule_root=tmp_path / "ext", build_timeout=5)
+    )
+    run = subprocess.run
+    timeouts = []
+
+    # the build subprocess times out; anything else (clang-format) runs as normal
+    def build_times_out(cmd: list[str], *args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if "setup.py" not in cmd:
+            return run(cmd, *args, **kwargs)
+        timeouts.append(kwargs["timeout"])
+        raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
+
+    monkeypatch.setattr(subprocess, "run", build_times_out)
+    with pytest.raises(CompilationError, match=r"timed out after 5s.*XENOFORM_BUILD_TIMEOUT"):
+        compile_module._check_build_fetch_module_impl("checksum_timeout", _spec("[]() { return 42; }"))
+    assert timeouts == [5]
+    # nothing vouches for the half-built module, so the next call rebuilds
+    assert not compile_module._get_checksum_path(tmp_path / "ext" / "checksum_timeout_ext", "checksum_timeout").exists()
