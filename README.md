@@ -504,6 +504,23 @@ Every error and warning is also available, unabridged, as `CppDiagnostic`s in th
 (gcc, clang and MSVC output is recognised). If no error can be recognised, e.g. for a linker failure, the exception
 shows the end of the log instead.
 
+Compiler warnings in your code are issued as `CppWarning`s (a `UserWarning`) when the module is built, attributed to
+the call that triggered the build. Each carries its `CppDiagnostic` as `diagnostic`. "Your code" means `module.cpp` and
+headers under your `extra_include_paths`: warnings from the standard library's, Python's, pybind11's and numpy's
+headers stay in `build.log`. An up-to-date module isn't rebuilt, so its warnings aren't repeated. They can be filtered
+like any other warning, e.g. to make them errors in CI:
+
+```py
+import warnings
+
+from xenoform import CppWarning
+
+warnings.simplefilter("error", CppWarning)
+```
+
+or, as `-W`/`PYTHONWARNINGS` can't name a category from a third-party package, by message:
+`PYTHONWARNINGS="error:compiler warning"`, or with pytest, `filterwarnings = ["error:compiler warning"]`.
+
 Because the build runs `sys.executable`, xenoform can't build modules in an embedded interpreter whose `sys.executable`
 isn't Python.
 

@@ -68,10 +68,11 @@ def test_rebuild_lifecycle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(compile_module, "_load_module", MagicMock())
     built: list[str] = []
 
-    def fake_build(module_dir: Path, module_name: str, _spec: ModuleSpec, _code: str, hashval: str) -> None:
+    def fake_build(module_dir: Path, module_name: str, _spec: ModuleSpec, _code: str, hashval: str) -> list:
         built.append(hashval)
         compile_module._get_binary_path(module_dir, module_name).touch()
         compile_module._get_checksum_path(module_dir, module_name).write_text(hashval)
+        return []
 
     monkeypatch.setattr(compile_module, "_build", fake_build)
 
