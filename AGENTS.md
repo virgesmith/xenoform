@@ -80,6 +80,11 @@ implementation in the docstring. The `@xenoform.compile()` decorator generates a
 first use (or after a change), and transparently redirects the Python callable to the compiled C++
 implementation.
 
+**Scope:** xenoform is for on-the-fly development (prototyping, quick performance wins in hot Python code), **not**
+for distributing compiled extensions — that's what a regular pybind11 or nanobind package is for. A C++ compiler is
+required wherever the code runs. Don't justify features by deployments without one, or by shipping prebuilt binaries
+(see the scope entry in [JOURNAL.md](JOURNAL.md)).
+
 ```py
 import xenoform
 
@@ -113,6 +118,7 @@ The library source lives in [src/xenoform/](src/xenoform/):
 | [errors.py](src/xenoform/errors.py) | `AnnotationError`, `CompilationError` (with parsed `diagnostics`), `CppTypeError`, `CppWarning` |
 | [diagnostics.py](src/xenoform/diagnostics.py) | `CppDiagnostic`; parses gcc/clang/MSVC output from `build.log`, `brief` form for exception messages |
 | [logger.py](src/xenoform/logger.py) | Lightweight stdout logger (stdlib `logging` breaks under `redirect_stdout`) |
+| [skill_cli.py](src/xenoform/skill_cli.py) | `xenoform-skill` console script: symlinks the bundled [skill/SKILL.md](src/xenoform/skill/SKILL.md) into a project |
 | [__init__.py](src/xenoform/__init__.py) | Public API: `compile`, `ReturnValuePolicy`, errors, `CppWarning`, `CppDiagnostic`, `Platform`, `platform_specific` |
 
 Tests are in [src/test/](src/test/). Examples are in [examples/](examples/).
@@ -171,8 +177,10 @@ Defaults (override per-arg with `typing.Annotated[T, "cpp_type"]`):
 
 When you add or change a mapping, also update `HEADER_REQUIREMENTS` (so the right pybind11/STL header
 is pulled in), the table in [README.md](README.md), and the type tests under [src/test/](src/test/).
-This table is duplicated in the README by design (that one is for users, this one for agents) — they
-must be changed together.
+This table is duplicated by design in the README (for users) and in the bundled agent skill
+[src/xenoform/skill/SKILL.md](src/xenoform/skill/SKILL.md) (for agents working in downstream projects) — all three
+must be changed together. The skill also summarises the `@compile` parameters, configuration and gotchas, so keep it
+in step with any change to those.
 
 ## Configuration (env vars, `XENOFORM_` prefix)
 
@@ -360,6 +368,8 @@ src/
     utils.py              # signature translation, header grouping, clang-format, free-threading
     config.py             # pydantic-settings config (XENOFORM_* env vars)
     errors.py             # AnnotationError, CompilationError, CppTypeError, CppWarning
+    skill_cli.py          # xenoform-skill console script (install/remove the agent skill)
+    skill/SKILL.md        # bundled agent skill for downstream projects
     diagnostics.py        # CppDiagnostic, compiler output parsing
     logger.py             # lightweight stdout logger (verbose mode)
     py.typed              # PEP 561 marker

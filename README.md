@@ -41,6 +41,20 @@ By default, the `ext` subfolder contains binaries, generated source code and bui
 [below](#location-of-extension-modules).
 
 
+## What it's for
+
+xenoform is for writing C++ on the fly during development: prototyping, and quick performance wins in hot Python code,
+without leaving the Python file or setting up a build. It is **not** designed for distributing compiled extensions.
+Modules are compiled on the machine that runs them, so a C++20 compiler is needed wherever the code runs, and there is
+no way to ship the binaries in a wheel.
+
+For C++ that should be distributed, or that has outgrown a docstring, write a regular extension package with
+[pybind11](https://pybind11.readthedocs.io/) or [nanobind](https://nanobind.readthedocs.io/), built with e.g.
+[scikit-build-core](https://scikit-build-core.readthedocs.io/). That gives a proper build backend, wheels for each
+platform (e.g. via [cibuildwheel](https://cibuildwheel.pypa.io/)), and no compiler needed at install time. The
+generated `module.cpp` in `ext/<module>_ext/` is a pybind11 module, so it's a starting point for the former.
+
+
 ## Features
 
 - Supports [`numpy` arrays](https://pybind11.readthedocs.io/en/stable/advanced/pycpp/numpy.html) for customised
@@ -91,6 +105,10 @@ delete the module's `.checksum` file (or its folder under `ext`)
 `ignore[empty-body]` may be required to silence type checkers.
 
 ## Usage
+
+> **Using an AI coding agent?** xenoform ships an installable [agent skill](#agent-skill): run
+> `uv run xenoform-skill --install` and your agent gets a compact reference for writing `@compile`-decorated code,
+> without needing this whole README in context.
 
 Simply decorate your C++ functions with the `compile` decorator factory - it handles all the configuration and
 compilation. It can be customised with these optional parameters:
@@ -147,6 +165,21 @@ def simulate(x: float) -> float:  # ty: ignore[empty-body]
   different values in one module is a redefinition error from the compiler.
 - Linters can't see a name used only in a `constants` string, so may flag an import as unused (and `ruff check --fix`
   will delete it). Mark it with `# noqa: F401`, or `# noqa: F841` for a local.
+
+
+### Agent skill
+
+xenoform ships a `SKILL.md` for AI coding agents (e.g. Claude Code) covering the `@compile` decorator, the type
+translations, constants, compiler errors and warnings, and common gotchas. Install it into a project as a symlink to
+the version installed in the current environment, so it never goes stale:
+
+```sh
+uv run xenoform-skill --install [PATH]  # default PATH: .agents
+uv run xenoform-skill --remove [PATH]   # default PATH: .agents
+```
+
+This creates (or removes) `PATH/skills/xenoform`. It never overwrites or deletes a file, directory or symlink it
+didn't create.
 
 
 ## Performance

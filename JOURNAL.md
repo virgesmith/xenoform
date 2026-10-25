@@ -22,6 +22,79 @@ Entry template:
 
 ---
 
+## 2026-10-25 — Scope: on-the-fly development, not distribution
+
+**Why** — The parity plan left xenoform's scope as an open decision. `xenoform-rs` settled the same question (its
+2026-10-19 entry) after a design rationale had quietly leaned on an unasked-for deployment case: prebuilt binaries
+with no toolchain. Writing the agent skill (entry below) needed an answer, so that agents give consistent advice.
+
+**What**
+- Maintainer decision: xenoform is for writing C++ on the fly during development, i.e. prototyping and quick
+  performance wins in hot Python code. It is **not** designed for distributing compiled extensions. For that, use a
+  regular extension package with pybind11 or nanobind (built with e.g. scikit-build-core, and cibuildwheel for wheels).
+- README "What it's for" section, the skill's "not worth it" list, and a scope note in AGENTS.md's project overview.
+
+**Design decisions**
+- *Not a distribution tool.* Shipping prebuilt modules would need several things, which amount to a second product
+  that pybind11/nanobind packaging already does properly:
+  - a package-relative binary lookup ahead of `extmodule_root`;
+  - checksums keyed by wheel tag rather than exact interpreter;
+  - a prebuilt-only mode, and a build hook;
+  - the same xenoform version at build and run time, since the generated source, and so the hash, depends on it.
+- *Point at both pybind11 and nanobind.* xenoform generates pybind11 code, so `module.cpp` ports to a pybind11
+  package directly. nanobind is the same authors' leaner successor (smaller binaries, faster compiles and calls), and
+  a reasonable choice for new code, at the cost of some API differences.
+- *A C++ compiler is required wherever the code runs.* Features aren't to be justified by deployments without one.
+- *Consequence for the plan:* rs's ahead-of-time build command was motivated partly by images without a toolchain;
+  that motivation doesn't apply here. Warming the build cache before a test run would still be in scope, if ever
+  wanted.
+
+**Follow-ups** — none.
+
+---
+
+## 2026-10-25 — Installable agent skill (`xenoform-skill`)
+
+**Why** — Coding agents write `@compile`-decorated code more reliably with a compact, purpose-built reference than with
+the whole README in context, and a reference shipped with the package is available in any downstream project.
+Ported from `xenoform-rs` #24 (PR 8 of the parity plan).
+
+**What**
+- `src/xenoform/skill/SKILL.md`, a skill (with name/description frontmatter) covering:
+  - how compilation works, and when `@compile` is worth it, with the README's benchmark numbers (~40x for the
+    unvectorisable loop, ~30x over vectorised numpy for the distance matrix);
+  - the decorator parameters, the type table and `Annotated` overrides;
+  - constants, gotchas, configuration, and troubleshooting: `CompilationError`/`CppDiagnostic`, `CppWarning`, and
+    the files in `ext/<module>_ext/`.
+- `src/xenoform/skill_cli.py`, the `xenoform-skill` console script (`[project.scripts]`): `--install [PATH]` /
+  `--remove [PATH]`, default `PATH=.agents`, symlinking `PATH/skills/xenoform` to the installed package's `skill/`.
+- `test_skill_cli.py`; README "Agent skill" section and pointer; AGENTS.md file tables. AGENTS.md now says the type
+  table is in three places that change together.
+
+**Design decisions**
+- *A straight port of rs's CLI and tests, names changed.* Its decisions carry over unchanged:
+  - symlink rather than copy, so the skill always matches the installed version;
+  - bundled in the package, so install needs no network;
+  - refuse rather than overwrite anything it didn't create;
+  - a relative link target, falling back to an absolute one where `os.path.relpath` raises across Windows drives
+    (which rs's CI hit).
+
+  Nothing in them is Rust-specific.
+- *The SKILL.md is rewritten for C++, not translated.* Its structure follows rs's, but every fact comes from this
+  repo's README, tests and code. Static and class methods were checked in `test_method.py`, and same-name overloading
+  was checked in #33.
+- *The skill states the scope (see the entry above)*, so an agent steers anyone who needs to ship binaries to
+  pybind11 or nanobind rather than `@compile`.
+- *Packaging checked:* a wheel built by hatchling contains `xenoform/skill/SKILL.md` and the `xenoform-skill` entry
+  point, with no extra config (checked with `unzip -l`).
+
+**Follow-ups**
+- Like rs, it only installs to `PATH/skills/xenoform`. Other harness layouts (e.g. `.claude/skills`) work by passing
+  that path.
+- The skill duplicates README content and can drift. AGENTS.md now lists it among the places to update.
+
+---
+
 ## 2026-10-25 — Compiler warnings as `CppWarning`
 
 **Why** — Compiler warnings (unused variables, sign comparisons, narrowing, a missing return) are often real mistakes in
