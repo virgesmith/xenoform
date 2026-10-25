@@ -283,7 +283,9 @@ real C++, so they are inherently integration-level — every code path should be
 ## Conventions & Gotchas
 
 - The test suite turns `CppWarning` into an error (`filterwarnings` in [pyproject.toml](pyproject.toml)), so C++ in
-  a test that starts warning fails it. Fix the C++ rather than filtering the warning. The filter matches the message
+  a test that starts warning fails it. Fix the C++ rather than filtering the warning. CI enforces this on Ubuntu (gcc)
+  only: clang and MSVC warn differently by default (e.g. MSVC's C4267 for `size_t` → `int`), so the macOS and Windows
+  jobs override it with `-W "default:compiler warning"` and only report. The filter matches the message
   prefix `compiler warning`, which must stay fixed: naming the category instead makes pytest import xenoform before
   coverage starts.
 - Decorated stubs have an empty body, so add `# ty: ignore[empty-body]` to silence the type checker,

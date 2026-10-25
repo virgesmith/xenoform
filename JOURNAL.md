@@ -34,7 +34,9 @@ warnings can now be surfaced. Ported from `xenoform-rs` #33 (PR 6 of the parity 
   `_check_build_fetch_module_impl` then issues one `CppWarning` per warning (`_warn`), with the message
   `compiler warning in module '<name>_ext.<name>':` followed by the warning in `brief` form.
 - The test suite turns `CppWarning` into an error (`filterwarnings = ["error:compiler warning"]` in pyproject.toml).
-  The existing suite triggers none on gcc.
+  The existing suite triggers none on gcc. CI enforces this on Ubuntu only: the macOS and Windows jobs set
+  `PYTEST_ADDOPTS=-W 'default:compiler warning'`, and pytest's command-line filters take precedence over the ini ones.
+- Identical warnings (same file, line, column and message) are issued once.
 - `test_cpp_warning.py`:
   - a warning is issued, with its diagnostic attached and attributed to the caller;
   - an up-to-date module doesn't repeat it;
@@ -68,6 +70,18 @@ warnings can now be surfaced. Ported from `xenoform-rs` #33 (PR 6 of the parity 
   category, so `error:compiler warning` is the way to escalate from the command line. The test suite's own filter uses
   it for a second reason, found the hard way: `error::xenoform.CppWarning` makes pytest import xenoform while reading
   its config, before coverage starts, and coverage fell to 64%.
+- *Enforced on Ubuntu only (maintainer decision), not by fixing the test C++ for every compiler.* The first CI run
+  failed on all four Windows jobs: MSVC warns C4267/C4244 (`size_t`/`ssize_t` → `int`, "possible loss of data") in
+  `test_kwargs.py`, `test_slice.py` and `test_stl.py`, which gcc only reports with `-Wconversion`. The point of the
+  filter is to catch generated code that starts warning, and one compiler does that. Chasing each compiler's defaults
+  in test code would add churn without testing xenoform. The filter stays in pyproject.toml, so a local run on Linux
+  enforces it too. `test_cpp_warning.py` still runs everywhere: it passed on Windows, and it's the only real check
+  that MSVC's full-path warnings are parsed and pass the allowlist.
+- *Duplicates are dropped.* On macOS with Python 3.13 (only), `test_warning_is_issued` got more than one `CppWarning`.
+  The CI log doesn't show the compiler output. The likely cause, unverified, is a universal2 interpreter: it compiles
+  once per architecture (`-arch arm64 -arch x86_64`), so each warning appears twice, and users of such interpreters
+  would see every warning twice. The test now also picks out the unused-variable warning, rather than assuming the
+  compiler emits nothing else.
 - *An uninitialised unused local triggers the tests' warning.* All three compilers warn about it at their default
   levels: gcc and clang `-Wunused-variable` under `-Wall`, MSVC C4101 at `/W3`. An initialised one is only level 4 on
   MSVC.
@@ -77,8 +91,9 @@ warnings can now be surfaced. Ported from `xenoform-rs` #33 (PR 6 of the parity 
   user-visible, as those warnings are filtered, but still worth fixing on its own.
 - Warnings in the user's own headers are only recognised under `extra_include_paths`. A header found another way, e.g.
   through an absolute `-I` in `extra_compile_args`, counts as third-party.
-- clang's and MSVC's default warning sets differ from gcc's, so CI on macOS and Windows may surface warnings in the
-  test suite's own C++ that gcc doesn't report.
+- The MSVC conversion warnings in the test C++ are real 64-bit narrowing (`size_t` → `int`). Fixing them would let
+  Windows enforce the filter too, if wanted.
+- Confirm the universal2 explanation for macOS 3.13 (e.g. from the job's `build.log`).
 
 ---
 

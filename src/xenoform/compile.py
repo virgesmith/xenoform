@@ -153,15 +153,19 @@ def _user_warnings(diagnostics: list[CppDiagnostic], module_dir: Path, include_p
     The warnings in code the user can change: module.cpp, and their own headers (under their extra include paths).
     Warnings in the standard library's, Python's, pybind11's and numpy's headers are left in build.log: e.g. pyconfig.h
     redefines _POSIX_C_SOURCE whenever a standard header comes first, and gcc reports false -Wmaybe-uninitialized
-    positives inside <functional>. An allowlist, as those headers' locations vary by platform and toolchain
+    positives inside <functional>. An allowlist, as those headers' locations vary by platform and toolchain.
+    Duplicates are dropped: a compiler can report the same warning more than once, e.g. once per architecture in a
+    universal2 build
     """
     # relative include paths resolve against the module dir, which is the build's cwd
     roots = [module_dir.resolve(), *((module_dir / p).resolve() for p in include_paths)]
-    return [
-        d
+    user_warnings = {
+        (d.file, d.line, d.column, d.message): d
         for d in diagnostics
         if not d.is_error and any((module_dir / d.file).resolve().is_relative_to(root) for root in roots)
-    ]
+    }
+    # dicts keep the first insertion's position, so the compiler's order is kept
+    return list(user_warnings.values())
 
 
 def _warn(qualified_name: str, diagnostics: list[CppDiagnostic]) -> None:

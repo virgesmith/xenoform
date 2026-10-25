@@ -35,7 +35,8 @@ def test_warning_is_issued() -> None:
         module = compile_module._check_build_fetch_module_impl("warns", _spec(WARNS))
     assert module._f() == 2
 
-    (warning,) = [w for w in record if issubclass(w.category, CppWarning)]
+    # the unused variable's warning: a compiler may add others of its own
+    (warning,) = [w for w in record if issubclass(w.category, CppWarning) and "unused" in str(w.message)]
     assert str(warning.message).startswith("compiler warning in module 'warns_ext.warns':\n")
     # the parsed diagnostic is attached
     diagnostic = warning.message.diagnostic  # ty: ignore[unresolved-attribute]
@@ -89,3 +90,10 @@ def test_only_user_code_warns(tmp_path: Path) -> None:
     ]
     kept = compile_module._user_warnings(diagnostics, module_dir, ["../../inc"])
     assert [d.file for d in kept] == ["module.cpp", str(module_dir / "module.cpp"), "../../inc/mine.h"]
+
+
+def test_duplicate_warnings_are_issued_once(tmp_path: Path) -> None:
+    # e.g. a universal2 build compiles for each architecture, reporting each warning twice
+    module_dir = tmp_path / "m_ext"
+    first, other = _diagnostic("module.cpp"), _diagnostic("other.h")
+    assert compile_module._user_warnings([first, other, _diagnostic("module.cpp")], module_dir, []) == [first, other]
