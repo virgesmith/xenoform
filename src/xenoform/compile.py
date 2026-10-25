@@ -6,6 +6,7 @@ import subprocess
 import sys
 import sysconfig
 import threading
+import warnings
 from collections import ChainMap, defaultdict
 from collections.abc import Callable
 from functools import lru_cache, wraps
@@ -20,7 +21,7 @@ from itrx import Itr
 from xenoform.config import get_config
 from xenoform.cppmodule import FunctionSpec, ModuleSpec, ReturnValuePolicy
 from xenoform.diagnostics import CppDiagnostic, brief, parse_diagnostics
-from xenoform.errors import AnnotationError, CompilationError
+from xenoform.errors import AnnotationError, CompilationError, CppWarning
 from xenoform.logger import get_logger
 from xenoform.utils import (
     deduplicate,
@@ -147,7 +148,37 @@ def _failure_message(qualified_name: str, module_dir: Path, log: str, diagnostic
     )
 
 
-def _build(module_dir: Path, module_name: str, module_spec: ModuleSpec, code: str, hashval: str) -> None:
+def _user_warnings(diagnostics: list[CppDiagnostic], module_dir: Path, include_paths: list[str]) -> list[CppDiagnostic]:
+    """
+    The warnings in code the user can change: module.cpp, and their own headers (under their extra include paths).
+    Warnings in the standard library's, Python's, pybind11's and numpy's headers are left in build.log: e.g. pyconfig.h
+    redefines _POSIX_C_SOURCE whenever a standard header comes first, and gcc reports false -Wmaybe-uninitialized
+    positives inside <functional>. An allowlist, as those headers' locations vary by platform and toolchain
+    """
+    # relative include paths resolve against the module dir, which is the build's cwd
+    roots = [module_dir.resolve(), *((module_dir / p).resolve() for p in include_paths)]
+    return [
+        d
+        for d in diagnostics
+        if not d.is_error and any((module_dir / d.file).resolve().is_relative_to(root) for root in roots)
+    ]
+
+
+def _warn(qualified_name: str, diagnostics: list[CppDiagnostic]) -> None:
+    """
+    One CppWarning per compiler warning. The fixed message prefix lets a -W/PYTHONWARNINGS filter match it, as those
+    can't import xenoform to resolve the category. Attributed to the first frame outside xenoform: the call that
+    triggered the build
+    """
+    for d in diagnostics:
+        warnings.warn(
+            CppWarning(f"compiler warning in module {qualified_name!r}:\n{brief(d)}", d),
+            skip_file_prefixes=(str(Path(__file__).parent),),
+        )
+
+
+def _build(module_dir: Path, module_name: str, module_spec: ModuleSpec, code: str, hashval: str) -> list[CppDiagnostic]:
+    """Build the module, returning the warnings to issue"""
     ext_name = module_name + "_ext"
     qualified_name = f"{ext_name}.{module_name}"
     logger(f"(re)building module {qualified_name}")
@@ -197,6 +228,8 @@ def _build(module_dir: Path, module_name: str, module_spec: ModuleSpec, code: st
         raise CompilationError(_failure_message(qualified_name, module_dir, log, diagnostics), diagnostics)
     checksum_path.write_text(hashval, encoding="utf-8")
     logger(f"built {qualified_name}")
+    diagnostics = parse_diagnostics(log_path.read_text(encoding="utf-8", errors="replace"))
+    return _user_warnings(diagnostics, module_dir, deduplicate(module_spec.include_paths))
 
 
 def _check_build_fetch_module_impl(
@@ -209,13 +242,17 @@ def _check_build_fetch_module_impl(
 
     # the up-to-date path takes no lock, so it creates no files. A torn checksum read while another process writes it
     # can't match a full hash, so the worst case is taking the lock below and checking again
+    built_warnings: list[CppDiagnostic] = []
     if not _is_current(module_dir, module_name, hashval):
         module_dir.mkdir(exist_ok=True, parents=True)
         # filelock is thread-local by default, so this serialises threads as well as processes
         with FileLock(module_dir / ".build.lock"):
             # whoever held the lock may just have built this same source
             if not _is_current(module_dir, module_name, hashval):
-                _build(module_dir, module_name, module_spec, code, hashval)
+                built_warnings = _build(module_dir, module_name, module_spec, code, hashval)
+    # outside the lock, and after the checksum is written: a filter can turn a warning into an exception, but the
+    # build still succeeded. Only a build warns, so an up-to-date module doesn't repeat them
+    _warn(f"{module_name}_ext.{module_name}", built_warnings)
     return _load_module(f"{module_name}_ext.{module_name}", _get_binary_path(module_dir, module_name))
 
 

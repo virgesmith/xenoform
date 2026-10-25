@@ -58,6 +58,9 @@ testpaths = [
 # skews which build/caching branches run, so local coverage can read lower than a clean run.
 # The 100% gate is enforced in CI on a clean checkout (see .github/workflows/lint-test.yml).
 addopts = "--cov=src/xenoform --cov-report html --doctest-modules" #--doctest-glob=README.md"
+# a compiler warning in generated or test C++ fails the test that triggered the build. Matched on the message prefix:
+# naming the category (error::xenoform.CppWarning) makes pytest import xenoform before coverage starts
+filterwarnings = ["error:compiler warning"]
 
 [tool.ruff]
 line-length = 120

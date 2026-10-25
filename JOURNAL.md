@@ -22,6 +22,66 @@ Entry template:
 
 ---
 
+## 2026-10-25 — Compiler warnings as `CppWarning`
+
+**Why** — Compiler warnings (unused variables, sign comparisons, narrowing, a missing return) are often real mistakes in
+the inline C++, but they only went to `build.log`, which users rarely read. #36 parses the log into diagnostics, so the
+warnings can now be surfaced. Ported from `xenoform-rs` #33 (PR 6 of the parity plan, "PR C" in #35's re-cut).
+
+**What**
+- `CppWarning(UserWarning)`, exported, with the `CppDiagnostic` as `.diagnostic`.
+- After a successful build, `_build` parses the log and returns the warnings in the user's code (`_user_warnings`).
+  `_check_build_fetch_module_impl` then issues one `CppWarning` per warning (`_warn`), with the message
+  `compiler warning in module '<name>_ext.<name>':` followed by the warning in `brief` form.
+- The test suite turns `CppWarning` into an error (`filterwarnings = ["error:compiler warning"]` in pyproject.toml).
+  The existing suite triggers none on gcc.
+- `test_cpp_warning.py`:
+  - a warning is issued, with its diagnostic attached and attributed to the caller;
+  - an up-to-date module doesn't repeat it;
+  - a clean build issues none;
+  - a message filter escalates it, and the build is still recorded;
+  - only user code warns.
+- README troubleshooting (with filter examples) and AGENTS.md updated.
+
+**Design decisions**
+- *Only warnings in the user's code: an allowlist.* `module.cpp` lives in the module folder, along with the user's
+  headers under their `extra_include_paths`. The plan said one warning per warning-level diagnostic, but the logs show
+  why not:
+  - `pyconfig.h` warns `'_POSIX_C_SOURCE' redefined` in every module that includes a standard header (see the
+    header-order follow-up);
+  - gcc at `-O3` reports `-Wmaybe-uninitialized` false positives inside libstdc++'s `<functional>`, which the existing
+    `test_callable.py` triggers.
+
+  Neither is the user's to fix, and warning about them would teach users to ignore `CppWarning`. A denylist of
+  third-party include dirs (Python, pybind11, numpy) was tried first and missed the STL, whose location varies by
+  platform and toolchain. The allowlist doesn't need to know where any of them are. Everything is still in `build.log`.
+- *A warnings category, not the logger*, as in rs. Users can silence or escalate warnings with Python's own filters,
+  e.g. in CI, without new config.
+- *The diagnostic is attached to the warning instance*, so `catch_warnings(record=True)` gets the structured data, as
+  with `CompilationError.diagnostics`.
+- *Attributed with `skip_file_prefixes`* to the first frame outside the package, i.e. the call that triggered the build.
+  Unlike a `stacklevel`, that doesn't depend on the call path.
+- *Issued after the checksum is written, and outside the build lock.* If a filter turns a warning into an exception,
+  the build still succeeded and is recorded, so the next call loads it without rebuilding. That test also pins this.
+- *Only on a build.* An up-to-date module skips the compiler, so its warnings aren't repeated, as in rs.
+- *The fixed message prefix is API.* CPython won't import a third-party module to resolve a `-W`/`PYTHONWARNINGS`
+  category, so `error:compiler warning` is the way to escalate from the command line. The test suite's own filter uses
+  it for a second reason, found the hard way: `error::xenoform.CppWarning` makes pytest import xenoform while reading
+  its config, before coverage starts, and coverage fell to 64%.
+- *An uninitialised unused local triggers the tests' warning.* All three compilers warn about it at their default
+  levels: gcc and clang `-Wunused-variable` under `-Wall`, MSVC C4101 at `/W3`. An initialised one is only level 4 on
+  MSVC.
+
+**Follow-ups**
+- `group_headers` puts standard headers before `pybind11.h`, although Python requires `Python.h` first (#36). No longer
+  user-visible, as those warnings are filtered, but still worth fixing on its own.
+- Warnings in the user's own headers are only recognised under `extra_include_paths`. A header found another way, e.g.
+  through an absolute `-I` in `extra_compile_args`, counts as third-party.
+- clang's and MSVC's default warning sets differ from gcc's, so CI on macOS and Windows may surface warnings in the
+  test suite's own C++ that gcc doesn't report.
+
+---
+
 ## 2026-10-25 — Module-level constants via `@compile(constants=...)`
 
 **Why** — The C++ body is the docstring, and an f-string is never a docstring, so C++ code had no way to refer to a
