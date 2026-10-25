@@ -10,6 +10,7 @@ from operator import add
 from typing import Any, Literal, cast
 
 import clang_format
+import numpy as np
 from itrx import Itr
 
 from xenoform.config import get_config
@@ -42,6 +43,11 @@ def _cpp_string_literal(value: str) -> str:
     return '"' + "".join(chars) + '"'
 
 
+def _is_non_finite(value: Any) -> bool:
+    """inf and nan need std::numeric_limits, so <limits>"""
+    return isinstance(value, float) and not math.isfinite(value)
+
+
 def _translate_value(value: Any, cpptype: str) -> str:
     """Translate a Python default argument value to its C++ literal representation.
 
@@ -58,7 +64,7 @@ def _translate_value(value: Any, cpptype: str) -> str:
         return "std::nullopt"
     if isinstance(value, str):
         return _cpp_string_literal(value)
-    if isinstance(value, float) and not math.isfinite(value):
+    if _is_non_finite(value):
         # python's inf/nan aren't C++ literals. A python float is a double, which converts to any other
         # floating-point (or optional) parameter type
         if math.isnan(value):
@@ -74,6 +80,57 @@ def _translate_value(value: Any, cpptype: str) -> str:
             "implement the default in the C++ code instead"
         )
     raise TypeError(f"cannot translate default value {value!r} of type {type(value).__name__} to C++")
+
+
+# fmt: off
+_CPP_KEYWORDS = frozenset((
+    "alignas", "alignof", "and", "and_eq", "asm", "auto", "bitand", "bitor", "bool", "break", "case", "catch",
+    "char", "char8_t", "char16_t", "char32_t", "class", "compl", "concept", "const", "consteval", "constexpr",
+    "constinit", "const_cast", "continue", "co_await", "co_return", "co_yield", "decltype", "default", "delete",
+    "do", "double", "dynamic_cast", "else", "enum", "explicit", "export", "extern", "false", "float", "for",
+    "friend", "goto", "if", "inline", "int", "long", "mutable", "namespace", "new", "noexcept", "not", "not_eq",
+    "nullptr", "operator", "or", "or_eq", "private", "protected", "public", "register", "reinterpret_cast",
+    "requires", "return", "short", "signed", "sizeof", "static", "static_assert", "static_cast", "struct", "switch",
+    "template", "this", "thread_local", "throw", "true", "try", "typedef", "typeid", "typename", "union",
+    "unsigned", "using", "virtual", "void", "volatile", "wchar_t", "while", "xor", "xor_eq",
+))
+# fmt: on
+
+_CPP_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def parse_constant(entry: str) -> tuple[str, str | None]:
+    """Split a constants entry, "NAME" or "NAME: cpp_type", into the name and the explicit type (if any)"""
+    # a name can't contain a colon, so the first one separates it from the type, which can (std::uint64_t)
+    name, sep, cpp_type = (part.strip() for part in entry.partition(":"))
+    if not _CPP_IDENTIFIER.match(name) or name in _CPP_KEYWORDS:
+        raise ValueError(f"constant {entry!r}: {name!r} must be an ASCII identifier and not a C++ keyword")
+    if sep and not cpp_type:
+        raise ValueError(f"constant {entry!r}: no C++ type after the ':'")
+    return name, cpp_type or None
+
+
+def translate_constant(name: str, value: Any, cpp_type: str | None = None) -> tuple[str, list[str]]:
+    """
+    A namespace-scope constexpr declaration of the value, and the headers it needs. Without an explicit type, the type
+    is translated from the value's python type, as for an argument. Brace initialisation makes a narrowing conversion
+    (e.g. 2**40 into the default int) a compile error rather than a silently different value
+    """
+    headers: list[str] = []
+    if cpp_type is None:
+        if isinstance(value, str):
+            # a constants-only special case: std::string, the default for str, can't be a constexpr variable
+            cpp_type = "std::string_view"
+            headers.append("<string_view>")
+        else:
+            cpptype_tree = translate_type(type(value))
+            cpp_type = str(cpptype_tree)
+            headers += cpptype_tree.headers(HEADER_REQUIREMENTS)
+    # numpy scalars choose the C++ type (above) but render as their python equivalent
+    literal = value.item() if isinstance(value, np.generic) else value
+    if _is_non_finite(literal):
+        headers.append("<limits>")
+    return f"constexpr {cpp_type} {name}{{{_translate_value(literal, cpp_type)}}};", headers
 
 
 def _splitargs(signature: str) -> tuple[str, ...]:
@@ -123,7 +180,7 @@ def translate_function_signature(func: Callable[..., Any]) -> tuple[str, list[st
             arg_annotation = f'py::arg("{var_name}")'
             if var_name in defaults:
                 translated = _translate_value(defaults[var_name], f"{cpptype}")
-                if isinstance(defaults[var_name], float) and not math.isfinite(defaults[var_name]):
+                if _is_non_finite(defaults[var_name]):
                     headers.append("<limits>")
                 arg_def += f"={translated}"
                 arg_annotation += f"={translated}"

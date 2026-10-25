@@ -107,6 +107,46 @@ kwarg | type(=default) | description
 `return_value_policy` | `ReturnValuePolicy=ReturnValuePolicy.Automatic` | [Return value policy](https://pybind11.readthedocs.io/en/stable/advanced/functions.html#return-value-policies)
 `help` | `str \| None=None` | Docstring for the function
 `module_name` | `str \| None=None` | Extension module to build the function into, by default the stem of the file defining it. Must be an ASCII identifier. Functions from several files with the same `module_name` are built into one module, so must have compatible settings and distinct names. In notebooks, set it explicitly: the default comes from the kernel's temporary file for the cell, so isn't deterministic
+`constants` | `list[str] \| None=None` | Python variables to declare as C++ constants, by name, see [below](#constants)
+
+### Constants
+
+The C++ code is a docstring, so it can't refer to Python values, and an f-string isn't a docstring. Instead, list the
+variables the C++ needs in `constants`, by name, and each becomes a `constexpr` declaration in the module:
+
+```py
+from math import pi  # noqa: F401
+
+from xenoform import compile
+
+N_STEPS = 1000
+TOLERANCE = 1e-9
+SEED = 2**40
+
+
+@compile(constants=["N_STEPS", "TOLERANCE", "SEED: uint64_t", "pi"])
+def simulate(x: float) -> float:  # ty: ignore[empty-body]
+    """
+    // constexpr int N_STEPS{1000}; etc. are declared before this function
+    ...
+    """
+```
+
+- Names are looked up where the decorator is written: locals (e.g. in a function or class body) first, then
+  module-level and imported names. Values are captured at decoration; reassigning the variable afterwards has no
+  effect.
+- A variable from an enclosing function is only visible if the decorating scope also uses it.
+- The C++ type is translated from the value's type, as for arguments: `int` is `int`, `float` is `double`, numpy
+  scalars keep their width. `str` becomes `std::string_view`, as a `std::string` can't be `constexpr`. Override the
+  type with `"NAME: cpp_type"`, and supply any header it needs with `extra_includes`.
+- Constants are brace-initialised, so a value that doesn't fit the type is a compile error, not a different number:
+  `SEED = 2**40` needs `"SEED: uint64_t"` (or `int64_t`).
+- Only values with a C++ literal are supported: numbers (including `inf` and `nan`), `bool` and `str`. Containers
+  aren't.
+- Constants are declared at module scope, so functions in the same module can share them. The same name with
+  different values in one module is a redefinition error from the compiler.
+- Linters can't see a name used only in a `constants` string, so may flag an import as unused (and `ruff check --fix`
+  will delete it). Mark it with `# noqa: F401`, or `# noqa: F841` for a local.
 
 
 ## Performance
