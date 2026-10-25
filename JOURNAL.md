@@ -22,6 +22,67 @@ Entry template:
 
 ---
 
+## 2026-10-25 — Compiler errors in `CompilationError`
+
+**Why** — PR B of the re-cut PRs 4/5 (see the entry below). Since #35 the compiler's output reaches `build.log`, and a
+failed build put the log's last 30 lines in the exception. Those lines are mostly setuptools' command lines and the
+*last* errors, while C++ errors cascade, so the first one is usually the cause. A template error made it worse: gcc
+reports it deep inside the STL or pybind11 headers, with a 40-line instantiation chain whose only useful line, the
+one in `module.cpp`, is buried in the middle.
+
+**What**
+- New `diagnostics.py`: `parse_diagnostics(log)` turns compiler output into `CppDiagnostic`s (level, file, line,
+  column, MSVC code, message, and `rendered`, the diagnostic's full text). It recognises gcc/clang's
+  `file:line:col: error:` and MSVC's `file(line,col): error C2065:`, and strips ANSI colour codes first.
+- `CompilationError` has a `diagnostics` attribute holding every error and warning. Its message is the first error in
+  `brief` form, a count of the remaining errors and warnings, and the log path. It says that line numbers refer to
+  the generated `module.cpp`.
+- `brief` drops include chains, and any other context before the error that doesn't point at `module.cpp`. Notes after
+  the error are kept, and the result is capped at 30 lines. For gcc's template errors that leaves the
+  `module.cpp:25:18: required from here` line (with its snippet) and the error itself: 6 lines instead of 40.
+- If no error is recognised (linker failures, setuptools errors), the message is the log tail, as before.
+- `CppDiagnostic` is exported. README troubleshooting and AGENTS.md updated.
+- `test_diagnostics.py`:
+  - unit tests on gcc logs trimmed from real builds (an undeclared name, a template error, a missing header), and on
+    clang and MSVC samples;
+  - the message format and its fallback;
+  - an integration test on the real compiler, which CI runs against gcc, clang (macOS) and MSVC (Windows).
+
+**Design decisions**
+- *Groups, not lines.* gcc and clang emit a diagnostic as optional context lines, the diagnostic line, then its
+  snippet and notes. Notes can have context of their own: gcc puts an include chain before
+  `note: this is the location of the previous definition`. So context lines are held until the next diagnostic line
+  shows what they introduce: an error or warning starts a new group, and a note joins the current one. A first
+  version closed the group at the context line, and attached that note to the *next* warning. Found on the real log,
+  and pinned by a test.
+- *First error only, like gcc's own `-fmax-errors=1`.* Rejected: all errors, which for a template error is several
+  near-identical 40-line blocks. Also rejected: rs's choice of the errors with a suggested fix, since gcc's fix-it
+  hints are rarer and the first error is the conventional cause in C++. Everything is still in `diagnostics` and
+  `build.log`.
+- *Only the context before the error is trimmed.* Context that points elsewhere is the noise (STL internals, include
+  chains). Notes after an error often carry the actual reason ("candidate expects 2 arguments"), so they're all kept.
+  For clang, whose instantiation chain is notes, that can be long, hence the 30-line cap.
+- *Text parsing rather than structured compiler output.* gcc has JSON and (from gcc 13) SARIF output, clang
+  only experimental SARIF, and MSVC experimental SARIF (`/experimental:log`). No common format
+  exists across the three, and adding flags to every build would also change the checksum. Two regexes cover the
+  text forms, which have been stable for decades.
+- *The clang and MSVC samples are written by hand*, from the documented formats, as neither compiler is available
+  locally. The integration test is what checks them for real, in CI on macOS and Windows.
+- *Samples use ASCII quotes.* gcc uses typographic quotes in a UTF-8 locale and ASCII ones otherwise. The parser
+  ignores quotes, and ruff's RUF001 flags the typographic ones, so the ASCII form avoids a suppression.
+- *Linker errors aren't parsed.* On Linux and macOS, undefined symbols in a shared library only fail at load time.
+  `ld`'s and MSVC's `LNK` messages have other formats, and the log tail already shows them.
+
+**Follow-ups**
+- PR C: `CppWarning`, using `diagnostics` from a successful build. That needs the log parsed on success too.
+- Found while capturing logs: `group_headers` puts standard headers (e.g. `<algorithm>`) *before* `pybind11.h`, but
+  Python's docs require `Python.h` to come first. Every module that includes an STL header gets
+  `'_POSIX_C_SOURCE' redefined` warnings from gcc. They're harmless now, but PR C would surface them as a `CppWarning`
+  for most users, so this should be fixed first.
+- Mapping `module.cpp` lines back to the Python file and docstring line (rs #26 increment 2).
+
+---
+
 ## 2026-10-24 — Safe concurrent builds: a file lock per module, and the build in a subprocess
 
 **Why** — PRs 4 and 5 of the parity plan, re-cut by concern. This is the "build mechanics" half: PR B (parsing

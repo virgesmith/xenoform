@@ -19,6 +19,7 @@ from itrx import Itr
 
 from xenoform.config import get_config
 from xenoform.cppmodule import FunctionSpec, ModuleSpec, ReturnValuePolicy
+from xenoform.diagnostics import CppDiagnostic, brief, parse_diagnostics
 from xenoform.errors import AnnotationError, CompilationError
 from xenoform.logger import get_logger
 from xenoform.utils import deduplicate, format_cpp, get_function_scope, translate_function_signature
@@ -119,6 +120,26 @@ def _is_current(module_dir: Path, module_name: str, hashval: str) -> bool:
     return True
 
 
+def _failure_message(qualified_name: str, module_dir: Path, log: str, diagnostics: list[CppDiagnostic]) -> str:
+    """
+    The first compiler error, as later ones are often knock-on effects of it, and a count of the rest. Falls back to
+    the end of the log when no error could be parsed (e.g. a linker or setuptools failure)
+    """
+    log_path = module_dir / "build.log"
+    errors = [d for d in diagnostics if d.is_error]
+    if not errors:
+        tail = log.splitlines()[-_LOG_TAIL_LINES:]
+        return f"building {qualified_name} failed, see {log_path}:\n" + "\n".join(tail)
+    n_errors, n_warnings = len(errors) - 1, len(diagnostics) - len(errors)
+    rest = [f"{n_errors} more error{'s' if n_errors > 1 else ''}"] if n_errors else []
+    rest += [f"{n_warnings} warning{'s' if n_warnings > 1 else ''}"] if n_warnings else []
+    return (
+        f"building {qualified_name} failed (line numbers refer to {module_dir / 'module.cpp'}):\n"
+        f"{brief(errors[0])}\n"
+        f"({', '.join([*rest, f'full log: {log_path}'])})"
+    )
+
+
 def _build(module_dir: Path, module_name: str, module_spec: ModuleSpec, code: str, hashval: str) -> None:
     ext_name = module_name + "_ext"
     qualified_name = f"{ext_name}.{module_name}"
@@ -164,8 +185,9 @@ def _build(module_dir: Path, module_name: str, module_spec: ModuleSpec, code: st
         )
     if result.returncode:
         # MSVC writes in the console's code page, so the log may not be valid UTF-8
-        tail = log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-_LOG_TAIL_LINES:]
-        raise CompilationError(f"building {qualified_name} failed, see {log_path}:\n" + "\n".join(tail))
+        log = log_path.read_text(encoding="utf-8", errors="replace")
+        diagnostics = parse_diagnostics(log)
+        raise CompilationError(_failure_message(qualified_name, module_dir, log, diagnostics), diagnostics)
     checksum_path.write_text(hashval, encoding="utf-8")
     logger(f"built {qualified_name}")
 

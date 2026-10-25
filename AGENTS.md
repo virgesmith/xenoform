@@ -110,9 +110,10 @@ The library source lives in [src/xenoform/](src/xenoform/):
 | [extension_types.py](src/xenoform/extension_types.py) | Python → C++ type mapping, header requirements, type-tree translation |
 | [utils.py](src/xenoform/utils.py) | Signature translation, header grouping, `clang-format`, free-threading detection |
 | [config.py](src/xenoform/config.py) | `pydantic-settings` config (`XENOFORM_*` env vars) |
-| [errors.py](src/xenoform/errors.py) | `AnnotationError`, `CompilationError`, `CppTypeError` |
+| [errors.py](src/xenoform/errors.py) | `AnnotationError`, `CompilationError` (with parsed `diagnostics`), `CppTypeError` |
+| [diagnostics.py](src/xenoform/diagnostics.py) | `CppDiagnostic`; parses gcc/clang/MSVC output from `build.log`, `brief` form for exception messages |
 | [logger.py](src/xenoform/logger.py) | Lightweight stdout logger (stdlib `logging` breaks under `redirect_stdout`) |
-| [__init__.py](src/xenoform/__init__.py) | Public API: `compile`, `ReturnValuePolicy`, errors, `Platform`, `platform_specific` |
+| [__init__.py](src/xenoform/__init__.py) | Public API: `compile`, `ReturnValuePolicy`, errors, `CppDiagnostic`, `Platform`, `platform_specific` |
 
 Tests are in [src/test/](src/test/). Examples are in [examples/](examples/).
 
@@ -342,13 +343,14 @@ When reviewing a PR or diff, check:
 ```
 src/
   xenoform/               # the package
-    __init__.py           # public API: compile, ReturnValuePolicy, errors, Platform, platform_specific
+    __init__.py           # public API: compile, ReturnValuePolicy, errors, CppDiagnostic, Platform, platform_specific
     compile.py            # @compile decorator factory; deferred build/import/redirect machinery
     cppmodule.py          # FunctionSpec / ModuleSpec, source templates, ReturnValuePolicy
     extension_types.py    # Python -> C++ type mapping, header requirements, type-tree translation
     utils.py              # signature translation, header grouping, clang-format, free-threading
     config.py             # pydantic-settings config (XENOFORM_* env vars)
     errors.py             # AnnotationError, CompilationError, CppTypeError
+    diagnostics.py        # CppDiagnostic, compiler output parsing
     logger.py             # lightweight stdout logger (verbose mode)
     py.typed              # PEP 561 marker
   test/                   # pytest suite (one test_*.py per feature area)

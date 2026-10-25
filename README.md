@@ -442,8 +442,27 @@ See `clang-format` documentation for more info.
 
 The generated module source code is written to `module.cpp` in a specific folder (e.g. `ext/my_module_ext`), along
 with the `setup.py` that builds it. The build runs in a separate process, using the same interpreter, and its full
-output, including any compiler errors, goes to `build.log` in that folder. If the build fails, the `CompilationError`
-contains the last lines of the log. To rerun a build by hand, run `python setup.py build_ext --inplace` in that folder.
+output, including any compiler errors, goes to `build.log` in that folder. To rerun a build by hand, run
+`python setup.py build_ext --inplace` in that folder.
+
+If the build fails, the `CompilationError` shows the compiler's first error (later errors are often knock-on effects of
+it), a count of the rest, and the path to `build.log`. Line numbers refer to the generated `module.cpp`. For a
+template error, of the compiler's instantiation chain only the line in `module.cpp` that started it is shown, e.g.:
+
+```txt
+xenoform.errors.CompilationError: building my_module_ext.my_module failed (line numbers refer to ext/my_module_ext/module.cpp):
+module.cpp:25:18:   required from here
+   25 |         std::sort(v.begin(), v.end(), 42);
+      |         ~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~
+/usr/include/c++/15/bits/predefined_ops.h:158:30: error: expression cannot be used as a function
+  158 |         { return bool(_M_comp(*__it1, *__it2)); }
+      |                       ~~~~~~~^~~~~~~~~~~~~~~~
+(2 more errors, 2 warnings, full log: ext/my_module_ext/build.log)
+```
+
+Every error and warning is also available, unabridged, as `CppDiagnostic`s in the exception's `diagnostics` attribute
+(gcc, clang and MSVC output is recognised). If no error can be recognised, e.g. for a linker failure, the exception
+shows the end of the log instead.
 
 Because the build runs `sys.executable`, xenoform can't build modules in an embedded interpreter whose `sys.executable`
 isn't Python.
